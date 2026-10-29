@@ -370,6 +370,19 @@
       '<p><button type="button" class="btn-ghost" id="summon-more">Summon more</button></p></section>';
   }
 
+  function filteredTokens() {
+    var rarity = state.gallery.rarity;
+    var status = state.gallery.status;
+    var search = (state.gallery.search || "").trim();
+    return DATA.tokens.filter(function (t) {
+      if (rarity !== "all" && t.rarity.toLowerCase() !== rarity) return false;
+      if (status === "available" && t.status !== "Available") return false;
+      if (status === "minted" && t.status !== "Minted") return false;
+      if (search !== "" && String(t.id).indexOf(search) === -1) return false;
+      return true;
+    });
+  }
+
   function updateGalleryList() {
     var list = filteredTokens();
     var shown = list.slice(0, state.gallery.visible);
