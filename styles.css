@@ -126,8 +126,8 @@ th { color: var(--gold); font-size: .85rem; letter-spacing: .06em; }
 .pill-minted { color: var(--ok); border-color: var(--ok); }
 .art { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; }
 .art-img { object-fit: contain; object-position: center; background: #151027; }
-.art-img.art-lg { object-fit: cover; object-position: center 28%; }
-.art-lg { aspect-ratio: 16 / 9; }
+.art-img.art-lg { object-fit: contain; object-position: center; }
+.art-lg { aspect-ratio: 3 / 4; }
 .filters {
   display: flex; gap: .8rem; flex-wrap: wrap; align-items: end; margin: 1rem 0;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem;
