@@ -1,0 +1,181 @@
+/* Mythora — reconstruction data (not the original Emergent genesis table).
+ *
+ * Verified facts used here: cap 3,810; rarity counts Legendary 12, Epic 186,
+ * Rare 612, Common 3,000; the 12 Legendary token ids / editions / names /
+ * traits listed below; the two pre-minted tokens #1953 and #2496.
+ * Everything else in the gallery is generated deterministically in this
+ * file so the counts are exact. It is NOT the original allocation table.
+ * Pool split (from the Transparency page): Free 1,905 / Paid 1,905;
+ * Free: Epic 93, Rare 306, Common 1,506, Legendary 0;
+ * Paid: Legendary 12, Epic 93, Rare 306, Common 1,494.
+ * The two pre-minted tokens are counted in the Free pool, matching the
+ * starting counters (Minted 2, Free left 1,903, Paid left 1,905).
+ */
+(function (global) {
+  "use strict";
+
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  var LEGENDS = [
+    { id: 158, edition: "#001/012", name: "Nekomata, the Soul Ferry", role: "Guardian of crossings", element: "Soulfire", aura: "Soulfire Glow", eyes: "Teal Flame", accessory: "Soul Bell" },
+    { id: 672, edition: "#002/012", name: "Oni, the Royal Warden", role: "Vault warden", element: "Shadow", aura: "Violet Wisp", eyes: "Violet", accessory: "Kanabo Seal" },
+    { id: 686, edition: "#003/012", name: "Tengu, the Gale Herald", role: "Herald of the gale", element: "Wind", aura: "Crimson Gale", eyes: "Crimson", accessory: "Feather Fan" },
+    { id: 727, edition: "#004/012", name: "Ryu, the Storm Sovereign", role: "Storm guardian", element: "Thunder", aura: "Sovereign Storm", eyes: "Amber", accessory: "Cloud Sigil" },
+    { id: 925, edition: "#005/012", name: "Yuki-onna, the Silent Winter", role: "Winter guardian", element: "Ice", aura: "Crystal Frost", eyes: "Ice Blue", accessory: "Snowflake Pin" },
+    { id: 1011, edition: "#006/012", name: "Kirin, the Opal Judge", role: "Opal guardian", element: "Light", aura: "Prismatic Veil", eyes: "Opal", accessory: "Cloud Step" },
+    { id: 1086, edition: "#007/012", name: "Baku, the Dream Weaver", role: "Dream guardian", element: "Dream", aura: "Nebula Slumber", eyes: "Sleepy Silver", accessory: "Crescent Bell" },
+    { id: 1320, edition: "#008/012", name: "Kappa, the Jade Curator", role: "Curator of the archive", element: "Water", aura: "Tidepool Shine", eyes: "Jade", accessory: "Cucumber Offering" },
+    { id: 1996, edition: "#009/012", name: "Shisa, the Coral Sentinel", role: "Gate sentinel", element: "Earth", aura: "Sunward Roar", eyes: "Coral Gold", accessory: "Guardian Statue" },
+    { id: 2088, edition: "#010/012", name: "Kitsune, the Nine-Flame Oracle", role: "Oracle of flames", element: "Fire", aura: "Molten Halo", eyes: "Ruby", accessory: "Torii Charm" },
+    { id: 2128, edition: "#011/012", name: "Tanuki, the Moon Strategist", role: "Strategist", element: "Earth", aura: "Moonlit Leaf", eyes: "Emerald", accessory: "Ancient Leaf" },
+    { id: 3707, edition: "#012/012", name: "Hōō, the Ember Rebirth", role: "Ember guardian", element: "Rebirth", aura: "Rekindling Flames", eyes: "Solar Gold", accessory: "Ember Plume" }
+  ];
+
+  var PRE_MINTED = {
+    1953: { name: "Kinoko Spirit", rarity: "Common" },
+    2496: { name: "Three-Tail Kitsune", rarity: "Rare" }
+  };
+
+  var ELEMENTS = ["Moon", "Fire", "Water", "Wind", "Earth", "Thunder", "Ice", "Light", "Shadow", "Dream", "Dew", "Ember", "Cloud", "Star", "River", "Petal"];
+  var AURAS = ["Soft Glow", "Petal Drift", "Mist Veil", "Golden Shimmer", "Silver Haze", "Crimson Glow", "Azure Drift", "Jade Shine", "Amber Glow", "Violet Mist", "Frost Shimmer", "Solar Flare", "Tide Glow", "Leaf Drift", "Star Shimmer", "Ember Haze"];
+  var EYES = ["Jade", "Sapphire", "Amber", "Ruby", "Emerald", "Opal", "Violet", "Teal", "Gold", "Silver", "Crimson", "Ice Blue", "Hazel", "Onyx", "Pearl", "Coral"];
+  var ACCESSORIES = ["Spirit Lantern", "Fortune Coin", "Cloud Charm", "Leaf Pin", "Moon Bell", "Star Sigil", "River Stone", "Petal Charm", "Snow Pin", "Ember Charm", "Wind Fan", "Jade Bead", "Coral Charm", "Dream Catcher", "Iron Seal", "Paper Crane"];
+  var PALETTES = ["Twilight", "Frost", "Dawn", "Dusk", "Ember", "Mist", "Bloom", "Tide", "Grove", "Starlight", "Harvest", "Monsoon"];
+  var NAME_A = ["Amber", "Azure", "Crimson", "Dew", "Ember", "Frost", "Golden", "Harbor", "Ivory", "Jade", "Kite", "Lantern", "Maple", "Moon", "Mist", "Nettle", "Opal", "Pearl", "Quartz", "Reed", "Sable", "Tide", "Umber", "Velvet", "Willow", "Yew", "Zephyr", "Birch", "Coral", "Dusk", "Hollow", "Lumen"];
+  var NAME_B = ["Spirit", "Fox", "Guardian", "Wisp", "Keeper", "Herald", "Dancer", "Sage", "Wanderer", "Bloom", "Drummer", "Owl", "Cat", "Crane", "Turtle", "Moth", "Heron", "Badger", "Serpent", "Hare", "Frog", "Koi", "Lantern", "Sprite"];
+
+  function pick(rand, list) { return list[Math.floor(rand() * list.length)]; }
+
+  function buildTokens() {
+    var legendById = {};
+    LEGENDS.forEach(function (l) { legendById[l.id] = l; });
+
+    // Assign rarities to the remaining ids with a seeded shuffle so the
+    // counts are exact and reproducible.
+    var remaining = [];
+    for (var id = 1; id <= 3810; id++) {
+      if (!legendById[id] && !PRE_MINTED[id]) remaining.push(id);
+    }
+    var shuffleRand = mulberry32(3810);
+    for (var i = remaining.length - 1; i > 0; i--) {
+      var j = Math.floor(shuffleRand() * (i + 1));
+      var tmp = remaining[i]; remaining[i] = remaining[j]; remaining[j] = tmp;
+    }
+    var rarityById = {};
+    var cursor = 0;
+    function assign(count, rarity) {
+      for (var k = 0; k < count; k++) rarityById[remaining[cursor++]] = rarity;
+    }
+    assign(186, "Epic");
+    assign(611, "Rare");   // 612 total Rare including pre-minted #2496
+    assign(2999, "Common"); // 3,000 total Common including pre-minted #1953
+
+    // Pool assignment: sorted ids per rarity, split to the verified counts.
+    // Legends are all Paid. Pre-minted tokens count in the Free pool.
+    var poolById = {};
+    LEGENDS.forEach(function (l) { poolById[l.id] = "paid"; });
+    poolById[1953] = "free";
+    poolById[2496] = "free";
+    var byRarity = { Epic: [], Rare: [], Common: [] };
+    for (var id2 = 1; id2 <= 3810; id2++) {
+      if (legendById[id2] || PRE_MINTED[id2]) continue;
+      byRarity[rarityById[id2]].push(id2);
+    }
+    // Epic: 93 free / 93 paid. Rare: 305 free + #2496 = 306 free / 306 paid.
+    // Common: 1,505 free + #1953 = 1,506 free / 1,494 paid.
+    var freeTargets = { Epic: 93, Rare: 305, Common: 1505 };
+    Object.keys(byRarity).forEach(function (rarity) {
+      byRarity[rarity].forEach(function (tid, idx) {
+        poolById[tid] = idx < freeTargets[rarity] ? "free" : "paid";
+      });
+    });
+
+    // Generate names/traits per token with a per-id seeded generator.
+    var usedNames = {};
+    LEGENDS.forEach(function (l) { usedNames[l.name] = true; });
+    usedNames["Kinoko Spirit"] = true;
+    usedNames["Three-Tail Kitsune"] = true;
+
+    var tokens = [];
+    for (var tid = 1; tid <= 3810; tid++) {
+      if (legendById[tid]) {
+        var leg = legendById[tid];
+        tokens.push({
+          id: tid, edition: leg.edition, name: leg.name, role: leg.role,
+          rarity: "Legendary", pool: "paid",
+          element: leg.element, aura: leg.aura, eyes: leg.eyes,
+          accessory: leg.accessory, palette: null,
+          status: "Available", owner: null, mintedAt: null, preMinted: false
+        });
+        continue;
+      }
+      if (PRE_MINTED[tid]) {
+        var pre = PRE_MINTED[tid];
+        var prand = mulberry32(3810 + tid);
+        tokens.push({
+          id: tid, edition: null, name: pre.name, role: null,
+          rarity: pre.rarity, pool: "free",
+          element: pick(prand, ELEMENTS), aura: pick(prand, AURAS),
+          eyes: pick(prand, EYES), accessory: pick(prand, ACCESSORIES),
+          palette: pick(prand, PALETTES),
+          status: "Minted", owner: null, mintedAt: null, preMinted: true
+        });
+        continue;
+      }
+      var rand = mulberry32(3810 + tid);
+      var name = pick(rand, NAME_A) + " " + pick(rand, NAME_B);
+      var suffix = 2;
+      while (usedNames[name]) { name = pick(rand, NAME_A) + " " + pick(rand, NAME_B) + " " + suffix; suffix++; }
+      usedNames[name] = true;
+      tokens.push({
+        id: tid, edition: null, name: name, role: null,
+        rarity: rarityById[tid], pool: poolById[tid],
+        element: pick(rand, ELEMENTS), aura: pick(rand, AURAS),
+        eyes: pick(rand, EYES), accessory: pick(rand, ACCESSORIES),
+        palette: pick(rand, PALETTES),
+        status: "Available", owner: null, mintedAt: null, preMinted: false
+      });
+    }
+    return tokens;
+  }
+
+  var DATA = {
+    cap: 3810,
+    freeSupply: 1905,
+    paidSupply: 1905,
+    freeMintFee: 0.00005,
+    paidMintPrice: 0.0005,
+    maxFreePerWallet: 2,
+    maxPaidPerWallet: 10,
+    maxPaidPerTx: 5,
+    royalty: "5%",
+    symbol: "MYTH",
+    chain: "BNB Smart Chain",
+    chainId: 56,
+    intendedOwnerPayout: "0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7",
+    xUrl: "https://x.com/MythoraNFT",
+    rarity: [
+      { name: "Legendary", count: 12, share: "0.31%", weight: "10x" },
+      { name: "Epic", count: 186, share: "4.88%", weight: "4x" },
+      { name: "Rare", count: 612, share: "16.06%", weight: "2x" },
+      { name: "Common", count: 3000, share: "78.74%", weight: "1x" }
+    ],
+    proposals: [
+      { slug: "celestial-kitsune", name: "Celestial Kitsune, the Star Weaver" },
+      { slug: "raijin-dragon", name: "Raijin Dragon, the Thunder Drummer" },
+      { slug: "moonlit-yuki-onna", name: "Moonlit Yuki-onna, the Winter Queen" }
+    ],
+    tokens: buildTokens()
+  };
+
+  global.MYTHORA_DATA = DATA;
+  if (typeof module !== "undefined" && module.exports) module.exports = DATA;
+})(typeof window !== "undefined" ? window : globalThis);
