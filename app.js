@@ -12,7 +12,7 @@
   var tokensById = {};
   DATA.tokens.forEach(function (t) { tokensById[t.id] = t; });
 
-  /* Deployed contract (verified on-chain 29 Oct 2026; minting open). */
+  /* Deployed contract (behavior verified on-chain 29 Oct 2026; source verified on BscScan 30 Oct 2026; minting open). */
   var CONTRACT_ADDRESS = "0x27Ba185e74b681c3e548D369C1B0792eD7D738a1";
   var CHAIN_ID = 56;
   var RPC_URLS = [
@@ -279,7 +279,7 @@
     var rows = DATA.rarity.map(function (r) {
       return "<tr><td>" + esc(r.name) + "</td><td>" + r.share + "</td><td>" + r.count + "</td></tr>";
     }).join("");
-    return '<div class="banner" role="note"><strong>CONTRACT DEPLOYED &bull; VERIFIED ON-CHAIN</strong>' +
+    return '<div class="banner" role="note"><strong>CONTRACT DEPLOYED &bull; SOURCE VERIFIED ON BSCSCAN</strong>' +
       "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting is open on-chain. Your agent mints for you &mdash; this page only reads the chain.</p></div>" +
       '<section class="cover" aria-label="Mythora cover">' +
       '<div class="cover-stars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
@@ -596,7 +596,7 @@
       "<p><strong>Paid tier:</strong> 0.0005 BNB per token. All mint revenue is described as forwarded straight to the creator payout wallet in the same transaction.</p>" +
       "<p><strong>Secondary sales:</strong> 5% EIP-2981 royalty to the same creator wallet.</p></div>" +
       '<div class="card"><h3>Deployed contract</h3>' +
-      "<dl><dt>Status</dt><dd><strong>DEPLOYED &mdash; VERIFIED ON-CHAIN</strong></dd>" +
+      "<dl><dt>Status</dt><dd><strong>DEPLOYED &mdash; SOURCE VERIFIED ON BSCSCAN</strong></dd>" +
       "<dt>Contract address</dt><dd><span class=\"address\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</span><br><a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\">View on BscScan</a></dd>" +
       "<dt>Network</dt><dd>BNB Smart Chain &middot; Chain 56</dd>" +
       "<dt>Name / Symbol</dt><dd>Mythora (MYTH)</dd>" +
@@ -607,7 +607,8 @@
       "<dt>Total minted</dt><dd data-live=\"totalMinted\">" + displayNum(c.minted, c.error) + "</dd>" +
       "<dt>Minting</dt><dd data-live=\"mintActive\">" + (c.error ? "—" : (c.active == null ? "…" : (c.active ? "On (mintActive is true)" : "Off (mintActive is false)"))) + "</dd>" +
       "<dt>Royalty</dt><dd>5% to the payout wallet (EIP-2981)</dd>" +
-      "<dt>Verified on-chain</dt><dd>22:03 WIB, 29 Oct 2026. The deployed bytecode matches the verified contract draft.</dd></dl>" +
+      "<dt>Verified on-chain</dt><dd>22:03 WIB, 29 Oct 2026. The deployed bytecode matches the verified contract draft.</dd>" +
+      "<dt>Source code verified</dt><dd>01:52 WIB, 30 Oct 2026. BscScan returned &ldquo;Pass - Verified&rdquo;; the published source matches the deployed bytecode.</dd></dl>" +
       "<p>No audit report or auditor name is claimed here: no independent audit exists. The full art set and metadata are pinned to IPFS (root CID <span class=\"address\">bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u</span>); view them via the <a href=\"https://ipfs.filebase.io/ipfs/bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/1\">Filebase gateway</a>. The contract baseURI is set on-chain (BaseURIUpdated event, <a href=\"https://bscscan.com/tx/0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e\" target=\"_blank\" rel=\"noopener noreferrer\">tx 0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e</a>). The BscScan link above points to the real deployed contract.</p></div>" +
       '<div class="card"><h3>Displayed contract, summarised in plain words</h3>' +
       "<p>The code shown on the preview Transparency page (summarised here, not reproduced) used fixed constants for the 3,810 cap, the two 1,905 pools, the 0.00005 BNB free fee, the 0.0005 BNB paid price, and the per-wallet limits of 2 free and 10 paid. It named mint operations for the free pool (one token per call) and the paid pool (one to five per call), owner-only controls to switch minting on, change the metadata base address, and change the payout wallet, a safety withdrawal that always sends any stray balance to the payout wallet, and royalty handling. Minting was described as starting switched off, with a reentrancy guard on the mint operations and revenue forwarded in the same transaction.</p>" +
@@ -616,7 +617,7 @@
       "<p>There is no Fusion feature: it was removed at the owner's request, and the revised contract draft has no fusion or burn functions.</p></div>" +
       '<div class="card"><h3>Launch checklist</h3><ol>' +
       "<li>Final creator review of this page and the allocation table.</li>" +
-      "<li><strong>Done:</strong> deployed to BNB Smart Chain on 29 Oct 2026 (no testnet rehearsal, per the owner&apos;s decision) and verified on-chain.</li>" +
+      "<li><strong>Done:</strong> deployed to BNB Smart Chain on 29 Oct 2026 (no testnet rehearsal, per the owner&apos;s decision) and behavior-verified on-chain; source code verified on BscScan 30 Oct 2026.</li>" +
       "<li><strong>Done:</strong> full art set + metadata pinned to IPFS on 29 Oct 2026. Root CID <span class=\"address\">bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u</span> (<a href=\"https://ipfs.filebase.io/ipfs/bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/1\">gateway</a>). The contract baseURI is set on-chain (BaseURIUpdated event, <a href=\"https://bscscan.com/tx/0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e\" target=\"_blank\" rel=\"noopener noreferrer\">tx 0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e</a>), and the owner has called setMintActive \u2014 minting is open.</li>" +
       "<li>Verify the contract source on BscScan.</li>" +
       "<li><strong>Done:</strong> owner called setMintActive on 29 Oct 2026 \u2014 the drop is live (<a href=\"https://bscscan.com/tx/0xbd71bc2ff0953b6707830a628693315cb746b678d55f4103506fc6cc9ae4b0e8\" target=\"_blank\" rel=\"noopener noreferrer\">tx 0xbd71bc2ff0953b6707830a628693315cb746b678d55f4103506fc6cc9ae4b0e8</a>).</li>" +
