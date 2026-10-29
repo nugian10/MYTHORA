@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deploy Kontrak Mythora</title>
+<title>Deploy the Mythora Contract</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #0f1220; color: #f2f2f5; line-height: 1.5; }
@@ -39,89 +39,89 @@
 <body>
 <main>
   <div class="tag">MYTHORA &bull; BNB SMART CHAIN</div>
-  <h1>Deploy Kontrak Mythora</h1>
-  <p>Halaman ini mengirim kontrak Mythora ke BNB Smart Chain. Yang menandatangani hanya dompet kamu, di dalam aplikasi dompetmu sendiri.</p>
+  <h1>Deploy the Mythora Contract</h1>
+  <p>This page sends the Mythora contract to BNB Smart Chain. Only your wallet signs, inside your own wallet app.</p>
 
   <div class="warn">
-    <b>Penting.</b> Halaman ini TIDAK PERNAH meminta seed phrase atau private key.
-    Jangan pernah mengetik seed phrase atau private key di halaman web apa pun, dan jangan pernah mengirimkannya ke siapa pun, termasuk ke Muse.
-    Kalau ada halaman yang memintanya, itu penipuan. Tutup halaman itu.
+    <b>Important.</b> This page NEVER asks for a seed phrase or private key.
+    Never type a seed phrase or private key into any web page, and never send one to anyone, including Muse.
+    If a page asks for one, it is a scam. Close that page.
   </div>
 
   <div class="card">
-    <h2>Kontrak yang akan di-deploy</h2>
+    <h2>Contract to be deployed</h2>
     <table>
-      <tr><td>Nama</td><td>MythoraNFT (ERC-721)</td></tr>
-      <tr><td>Jumlah maksimal</td><td>3.810 token</td></tr>
-      <tr><td>Royalti</td><td>5% (EIP-2981)</td></tr>
-      <tr><td>Alamat payout</td><td class="mono">0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7</td></tr>
-      <tr><td>Mint</td><td>Mati saat pertama deploy. Diaktifkan nanti oleh owner, setelah gambar dan metadata final.</td></tr>
-      <tr><td>Harga mint</td><td>1.905 mint pertama 0,00005 BNB, sisanya 0,0005 BNB (diatur oleh urutan mint).</td></tr>
+      <tr><td>Name</td><td>MythoraNFT (ERC-721)</td></tr>
+      <tr><td>Max supply</td><td>3,810 tokens</td></tr>
+      <tr><td>Royalty</td><td>5% (EIP-2981)</td></tr>
+      <tr><td>Payout address</td><td class="mono">0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7</td></tr>
+      <tr><td>Mint</td><td>Off at deploy. Enabled later by the owner, after the final art and metadata.</td></tr>
+      <tr><td>Mint price</td><td>First 1,905 mints 0.00005 BNB, the rest 0.0005 BNB (by mint order).</td></tr>
     </table>
-    <p class="muted">Tidak ada fungsi Fusion, burn, atau voting di kontrak ini. Itu hanya simulasi di situs.</p>
+    <p class="muted">There are no Fusion, burn, or voting functions in this contract. Those are simulation-only on the site.</p>
   </div>
 
   <div class="card">
-    <h2>Langkah 1 &mdash; Hubungkan dompet</h2>
-    <p>Dompet yang harus terhubung adalah dompet owner. Deploy dari alamat lain akan membuat akun lain menjadi owner kontrak.</p>
-    <button id="btnConnect" class="primary">Hubungkan Dompet</button>
+    <h2>Step 1 &mdash; Connect your wallet</h2>
+    <p>The wallet that must connect is the owner wallet. Deploying from another address would make a different account the contract owner.</p>
+    <button id="btnConnect" class="primary">Connect Wallet</button>
     <div id="noWallet" class="warn hidden">
-      <b>Dompet tidak ditemukan.</b> Buka halaman ini di dalam browser aplikasi dompetmu sendiri
-      (misalnya lewat menu Browser di aplikasi dompet), atau buka di browser komputer yang sudah
-      terpasang ekstensi dompet. Lalu muat ulang halaman ini.
+      <b>No wallet found.</b> Open this page inside your wallet app's own browser
+      (for example via the Browser menu in the wallet app), or open it in a desktop browser
+      with a wallet extension installed. Then reload this page.
     </div>
     <div id="walletInfo" class="hidden">
-      <p>Alamat terhubung:<br><span id="addrText" class="mono"></span></p>
-      <p>Jaringan: <span id="chainText"></span></p>
+      <p>Connected address:<br><span id="addrText" class="mono"></span></p>
+      <p>Network: <span id="chainText"></span></p>
       <div id="addrWarn" class="warn hidden">
-        <b>ALAMAT SALAH.</b> Alamat yang terhubung bukan alamat owner.
-        Deploy dari alamat ini akan membuat akun lain menjadi owner dan penerima hasil mint.
-        Jangan lanjutkan. Ganti akun di dompetmu ke alamat owner, lalu hubungkan ulang.
+        <b>WRONG ADDRESS.</b> The connected address is not the owner address.
+        Deploying from this address would make another account the owner and the recipient of mint proceeds.
+        Do not continue. Switch accounts in your wallet to the owner address, then reconnect.
       </div>
-      <div id="addrOk" class="ok hidden">Alamat cocok dengan alamat owner.</div>
-      <button id="btnSwitch" class="secondary hidden">Pindah ke BNB Smart Chain</button>
+      <div id="addrOk" class="ok hidden">Address matches the owner address.</div>
+      <button id="btnSwitch" class="secondary hidden">Switch to BNB Smart Chain</button>
     </div>
   </div>
 
   <div class="card">
-    <h2>Langkah 2 &mdash; Periksa biaya gas</h2>
-    <p>Saldo BNB dompet: <b id="balanceText">&mdash;</b></p>
-    <p>Estimasi gas: <b id="gasText">&mdash;</b></p>
-    <label for="gasPrice">Harga gas (gwei)</label>
+    <h2>Step 2 &mdash; Check the gas cost</h2>
+    <p>Wallet BNB balance: <b id="balanceText">&mdash;</b></p>
+    <p>Estimated gas: <b id="gasText">&mdash;</b></p>
+    <label for="gasPrice">Gas price (gwei)</label>
     <input id="gasPrice" type="number" step="0.01" min="0.01" value="0.05" inputmode="decimal">
     <div class="row">
-      <button id="btnPreset" class="secondary" type="button">0,05 gwei (minimum jaringan)</button>
-      <button id="btnRefreshEst" class="secondary" type="button">Hitung ulang</button>
+      <button id="btnPreset" class="secondary" type="button">0.05 gwei (network minimum)</button>
+      <button id="btnRefreshEst" class="secondary" type="button">Recalculate</button>
     </div>
-    <p>Perkiraan biaya deploy: <b id="costText">&mdash;</b><br>
+    <p>Estimated deploy cost: <b id="costText">&mdash;</b><br>
     <span class="muted" id="costNote"></span></p>
     <div id="costWarn" class="warn hidden"></div>
   </div>
 
   <div class="card">
-    <h2>Langkah 3 &mdash; Deploy</h2>
-    <p>Tombol ini aktif hanya kalau alamat sudah cocok dan jaringan sudah BNB Smart Chain.
-    Menekan tombol ini akan membuka permintaan persetujuan di dompetmu. Periksa baik-baik
-    alamat, jaringan, dan biayanya di dompetmu sebelum menyetujui.</p>
-    <button id="btnDeploy" class="primary" disabled>Deploy Kontrak</button>
+    <h2>Step 3 &mdash; Deploy</h2>
+    <p>This button is only active when the address matches and the network is BNB Smart Chain.
+    Pressing it will open an approval request in your wallet. Check the address, network,
+    and cost carefully in your wallet before approving.</p>
+    <button id="btnDeploy" class="primary" disabled>Deploy Contract</button>
     <div id="status" class="muted"></div>
     <div id="result" class="hidden">
-      <p class="tag">KONTRAK BERHASIL DI-DEPLOY</p>
-      <p>Alamat kontrak:</p>
+      <p class="tag">CONTRACT DEPLOYED SUCCESSFULLY</p>
+      <p>Contract address:</p>
       <p class="big mono" id="contractAddr"></p>
       <div class="row">
-        <button id="btnCopy" class="secondary" type="button">Salin alamat</button>
-        <button id="btnScan" class="secondary" type="button">Lihat di BscScan</button>
+        <button id="btnCopy" class="secondary" type="button">Copy address</button>
+        <button id="btnScan" class="secondary" type="button">View on BscScan</button>
       </div>
       <p id="verifyText" class="muted"></p>
-      <p><b>Kirim alamat kontrak ini ke Muse.</b> Setelah itu Muse akan memeriksa kontraknya
-      di BscScan dan memasang alamatnya di situs.</p>
+      <p><b>Send this contract address to Muse.</b> Muse will then verify the contract
+      on BscScan and wire the address into the site.</p>
     </div>
   </div>
 
-  <p class="muted">Setelah deploy: mint masih MATI. Jangan aktifkan mint sebelum gambar dan
-  metadata final sudah dikunci dan diunggah. Owner mengaktifkan mint nanti lewat fungsi
-  setMintActive, dan mengatur alamat metadata lewat setBaseURI.</p>
+  <p class="muted">After deploy: mint stays OFF. Do not enable mint until the final art and
+  metadata are locked and uploaded. The owner enables mint later via the
+  setMintActive function, and sets the metadata address via setBaseURI.</p>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
@@ -142,7 +142,7 @@ function setStatus(t) { $("status").textContent = t; }
 function shortAddr(a) { return a ? a.slice(0, 6) + "..." + a.slice(-4) : ""; }
 
 function idrFormat(n) {
-  return "Rp " + Math.round(n).toLocaleString("id-ID");
+  return "Rp " + Math.round(n).toLocaleString("en-US");
 }
 
 async function loadBnbPrice() {
@@ -150,35 +150,35 @@ async function loadBnbPrice() {
     var r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd");
     var j = await r.json();
     if (j && j.binancecoin && j.binancecoin.usd) { bnbUsd = Number(j.binancecoin.usd); }
-  } catch (e) { /* pakai harga cadangan 750 USD */ }
+  } catch (e) { /* use the 750 USD fallback price */ }
 }
 
 function updateCost() {
   var costEl = $("costText"), noteEl = $("costNote"), warnEl = $("costWarn");
   if (!gasEstimate) { costEl.textContent = "—"; noteEl.textContent = ""; warnEl.classList.add("hidden"); return; }
   var gwei = parseFloat($("gasPrice").value);
-  if (isNaN(gwei) || gwei <= 0) { costEl.textContent = "Masukkan harga gas yang valid."; return; }
+  if (isNaN(gwei) || gwei <= 0) { costEl.textContent = "Enter a valid gas price."; return; }
   var gasPriceWei = ethers.parseUnits(gwei.toString(), "gwei");
   var costWei = gasEstimate * gasPriceWei;
   var costBnb = Number(ethers.formatEther(costWei));
   var idr = costBnb * bnbUsd * IDR_PER_USD;
   costEl.textContent = costBnb.toFixed(6) + " BNB (sekitar " + idrFormat(idr) + ")";
-  noteEl.textContent = "Perkiraan kasar. Harga BNB sekitar $" + bnbUsd + ", kurs Rp " + IDR_PER_USD.toLocaleString("id-ID") + " per USD. Biaya final ditentukan saat transaksi disetujui di dompet.";
+  noteEl.textContent = "Rough estimate. BNB price around $" + bnbUsd + ", rate Rp " + IDR_PER_USD.toLocaleString("en-US") + " per USD. The final cost is set when the transaction is approved in the wallet.";
   var msgs = [];
   if (idr > BUDGET_IDR) {
-    msgs.push("Biaya ini di atas anggaran Rp 10.000. Turunkan harga gas ke 0,05 gwei (minimum jaringan) kalau jaringan mengizinkan, atau tunda deploy sampai harga gas turun.");
+    msgs.push("This cost is above the Rp 10,000 budget. Lower the gas price to 0.05 gwei (network minimum) if the network allows, or wait to deploy until gas prices fall.");
   }
   if (userAddress) {
     provider.getBalance(userAddress).then(function (bal) {
       if (bal < costWei) {
-        warnEl.innerHTML = "<b>Saldo tidak cukup.</b> Saldo BNB dompet lebih kecil dari perkiraan biaya. Turunkan harga gas atau isi saldo dulu.";
+        warnEl.innerHTML = "<b>Insufficient balance.</b> The wallet BNB balance is smaller than the estimated cost. Lower the gas price or top up first.";
         warnEl.classList.remove("hidden");
         refreshDeployButton();
       }
     }).catch(function () {});
   }
   if (msgs.length) {
-    warnEl.innerHTML = "<b>Perhatian.</b> " + msgs.join(" ");
+    warnEl.innerHTML = "<b>Attention.</b> " + msgs.join(" ");
     warnEl.classList.remove("hidden");
   } else {
     warnEl.classList.add("hidden");
@@ -217,10 +217,10 @@ async function refreshChainUi() {
   var okChain = await chainIsBsc();
   var chainText = $("chainText");
   if (okChain) {
-    chainText.textContent = "BNB Smart Chain (56) — benar.";
+    chainText.textContent = "BNB Smart Chain (56) — correct.";
     $("btnSwitch").classList.add("hidden");
   } else {
-    chainText.textContent = "Bukan BNB Smart Chain. Pindah dulu sebelum deploy.";
+    chainText.textContent = "Not BNB Smart Chain. Switch before deploying.";
     $("btnSwitch").classList.remove("hidden");
   }
   return okChain;
@@ -232,17 +232,17 @@ async function refreshBalanceAndEstimate() {
   try {
     var bal = await provider.getBalance(userAddress);
     $("balanceText").textContent = Number(ethers.formatEther(bal)).toFixed(6) + " BNB";
-  } catch (e) { $("balanceText").textContent = "Tidak bisa dibaca."; }
+  } catch (e) { $("balanceText").textContent = "Could not be read."; }
   try {
-    setStatus("Menghitung estimasi gas…");
+    setStatus("Estimating gas…");
     var est = await provider.estimateGas({ from: userAddress, data: BYTECODE });
-    gasEstimate = est * 120n / 100n; // margin keamanan 20%
-    $("gasText").textContent = gasEstimate.toString() + " unit gas (sudah termasuk margin 20%)";
+    gasEstimate = est * 120n / 100n; // 20% safety margin
+    $("gasText").textContent = gasEstimate.toString() + " gas units (includes a 20% margin)";
     setStatus("");
   } catch (e) {
     gasEstimate = null;
-    $("gasText").textContent = "Tidak bisa dihitung: " + (e && e.message ? e.message : e);
-    setStatus("Estimasi gas gagal. Coba tekan Hitung ulang.");
+    $("gasText").textContent = "Could not be estimated: " + (e && e.message ? e.message : e);
+    setStatus("Gas estimation failed. Try pressing Recalculate.");
   }
   updateCost();
 }
@@ -254,7 +254,7 @@ async function connectWallet() {
     return;
   }
   try {
-    setStatus("Menunggu persetujuan di dompet…");
+    setStatus("Waiting for approval in your wallet…");
     await window.ethereum.request({ method: "eth_requestAccounts" });
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
@@ -272,9 +272,9 @@ async function connectWallet() {
     await refreshBalanceAndEstimate();
   } catch (e) {
     if (e && e.code === 4001) {
-      setStatus("Dibatalkan di dompet. Tidak ada yang terhubung dan tidak ada transaksi yang dikirim.");
+      setStatus("Cancelled in the wallet. Nothing was connected and no transaction was sent.");
     } else {
-      setStatus("Gagal menghubungkan dompet: " + (e && e.message ? e.message : e));
+      setStatus("Failed to connect the wallet: " + (e && e.message ? e.message : e));
     }
   }
 }
@@ -299,14 +299,14 @@ async function switchChain() {
           }]
         });
       } catch (e2) {
-        setStatus("Gagal menambah jaringan BNB Smart Chain: " + (e2 && e2.message ? e2.message : e2));
+        setStatus("Failed to add the BNB Smart Chain network: " + (e2 && e2.message ? e2.message : e2));
         return;
       }
     } else if (e && e.code === 4001) {
-      setStatus("Dibatalkan di dompet. Jaringan tidak berubah.");
+      setStatus("Cancelled in the wallet. The network was not changed.");
       return;
     } else {
-      setStatus("Gagal pindah jaringan: " + (e && e.message ? e.message : e));
+      setStatus("Failed to switch networks: " + (e && e.message ? e.message : e));
       return;
     }
   }
@@ -315,27 +315,27 @@ async function switchChain() {
 
 async function deploy() {
   if (deploying) return;
-  if (!addressMatches()) { setStatus("Alamat tidak cocok. Deploy dibatalkan."); return; }
-  if (!(await chainIsBsc())) { setStatus("Jaringan bukan BNB Smart Chain. Pindah dulu."); return; }
+  if (!addressMatches()) { setStatus("Address does not match. Deploy cancelled."); return; }
+  if (!(await chainIsBsc())) { setStatus("Network is not BNB Smart Chain. Switch first."); return; }
   var gwei = parseFloat($("gasPrice").value);
-  if (isNaN(gwei) || gwei <= 0) { setStatus("Masukkan harga gas yang valid."); return; }
+  if (isNaN(gwei) || gwei <= 0) { setStatus("Enter a valid gas price."); return; }
   deploying = true;
   $("btnDeploy").disabled = true;
   try {
     var gasPriceWei = ethers.parseUnits(gwei.toString(), "gwei");
-    setStatus("Mengirim transaksi deploy. Periksa dan setujui di dompetmu…");
+    setStatus("Sending the deploy transaction. Check and approve it in your wallet…");
     var tx = await signer.sendTransaction({
       data: BYTECODE,
       gasLimit: gasEstimate,
       gasPrice: gasPriceWei
     });
-    setStatus("Transaksi terkirim. Hash: " + tx.hash + "\nMenunggu konfirmasi di jaringan…\nLihat di BscScan: https://bscscan.com/tx/" + tx.hash);
+    setStatus("Transaction sent. Hash: " + tx.hash + "\nWaiting for network confirmation…\nView on BscScan: https://bscscan.com/tx/" + tx.hash);
     var receipt = await tx.wait();
     var addr = receipt.contractAddress;
     $("contractAddr").textContent = addr;
     $("result").classList.remove("hidden");
     $("btnScan").onclick = function () { window.open("https://bscscan.com/address/" + addr, "_blank"); };
-    setStatus("Deploy selesai di blok " + receipt.blockNumber + ".");
+    setStatus("Deploy finished in block " + receipt.blockNumber + ".");
     try {
       var c = new ethers.Contract(addr, ABI, provider);
       var owner = await c.owner();
@@ -345,17 +345,17 @@ async function deploy() {
       var okOwner = owner.toLowerCase() === userAddress.toLowerCase();
       var okPayout = payout.toLowerCase() === EXPECTED_ADDRESS.toLowerCase();
       $("verifyText").textContent =
-        "Pemeriksaan kontrak: owner = " + owner + (okOwner ? " (cocok dengan dompetmu)" : " (TIDAK COCOK)") +
-        "; payoutWallet = " + payout + (okPayout ? " (cocok)" : " (TIDAK COCOK)") +
-        "; max supply = " + cap.toString() + "; mint aktif = " + (active ? "YA" : "tidak (benar, harus mati dulu)") + ".";
+        "Pemeriksaan kontrak: owner = " + owner + (okOwner ? " (matches your wallet)" : " (MISMATCH)") +
+        "; payoutWallet = " + payout + (okPayout ? " (matches)" : " (MISMATCH)") +
+        "; max supply = " + cap.toString() + "; mint active = " + (active ? "YA" : "off (correct, it must start off)") + ".";
     } catch (e) {
-      $("verifyText").textContent = "Kontrak ter-deploy, tapi pemeriksaan baca data gagal: " + (e && e.message ? e.message : e) + ". Alamat di atas tetap bisa diperiksa di BscScan.";
+      $("verifyText").textContent = "The contract deployed, but the data read-back check failed: " + (e && e.message ? e.message : e) + ". The address above can still be checked on BscScan.";
     }
   } catch (e) {
     if (e && e.code === 4001) {
-      setStatus("Dibatalkan di dompet. Tidak ada transaksi yang dikirim dan tidak ada biaya.");
+      setStatus("Cancelled in the wallet. No transaction was sent and there was no cost.");
     } else {
-      setStatus("Deploy gagal: " + (e && e.message ? e.message : e));
+      setStatus("Deploy failed: " + (e && e.message ? e.message : e));
     }
   } finally {
     deploying = false;
@@ -372,7 +372,7 @@ $("gasPrice").addEventListener("input", updateCost);
 $("btnCopy").addEventListener("click", function () {
   var t = $("contractAddr").textContent;
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(t).then(function () { $("btnCopy").textContent = "Disalin!"; });
+    navigator.clipboard.writeText(t).then(function () { $("btnCopy").textContent = "Copied!"; });
   }
 });
 if (typeof window.ethereum !== "undefined") {
