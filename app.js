@@ -54,14 +54,14 @@
     3707: "media-generation-hoo-ember-rebirth-0-f00ed8ef-dc8c-4818-aa67-2dba15ad50c2.jpg"
   };
   var BASES = {
-    foxFire: "bases/media-generation-base-fox-fire-0-6956e90d-c529-411f-b283-da702ebb1ce9.jpg",
-    foxIce: "bases/media-generation-base-fox-ice-0-bfefe98f-644d-4532-9cc9-f4de7c394bdd.jpg",
-    dragonWater: "bases/media-generation-base-dragon-water-0-661aeddb-afce-4670-b3fa-dd0f1720970c.jpg",
-    dragonThunder: "bases/media-generation-base-dragon-thunder-0-1d2b5f73-8617-4a84-b5d1-c9cf01d85950.jpg",
-    catWind: "bases/media-generation-base-cat-wind-0-004e9dc8-3d6c-41aa-a7dd-36bcb6219c2e.jpg",
-    spiritMoon: "bases/media-generation-base-spirit-moon-0-2d594639-1bf4-475b-9d55-686671473ba4.jpg",
-    kappaEarth: "bases/media-generation-base-kappa-earth-0-8b1dfa08-2eea-47d3-a5d0-aeeb9e95bbeb.jpg",
-    birdRebirth: "bases/media-generation-base-bird-rebirth-0-a922da7b-606e-4419-8e70-ece391223b74.jpg"
+    foxFire: "media-generation-base-fox-fire-0-6956e90d-c529-411f-b283-da702ebb1ce9.jpg",
+    foxIce: "media-generation-base-fox-ice-0-bfefe98f-644d-4532-9cc9-f4de7c394bdd.jpg",
+    dragonWater: "media-generation-base-dragon-water-0-661aeddb-afce-4670-b3fa-dd0f1720970c.jpg",
+    dragonThunder: "media-generation-base-dragon-thunder-0-1d2b5f73-8617-4a84-b5d1-c9cf01d85950.jpg",
+    catWind: "media-generation-base-cat-wind-0-004e9dc8-3d6c-41aa-a7dd-36bcb6219c2e.jpg",
+    spiritMoon: "media-generation-base-spirit-moon-0-2d594639-1bf4-475b-9d55-686671473ba4.jpg",
+    kappaEarth: "media-generation-base-kappa-earth-0-8b1dfa08-2eea-47d3-a5d0-aeeb9e95bbeb.jpg",
+    birdRebirth: "media-generation-base-bird-rebirth-0-a922da7b-606e-4419-8e70-ece391223b74.jpg"
   };
   var ARCHETYPES = ["Fox", "Cat", "Dragon", "Spirit", "Kappa", "Bird"];
   function baseFor(token) {
@@ -76,7 +76,7 @@
   function artFor(token, large) {
     var src, label;
     if (LEGEND_ART[token.id]) {
-      src = "artwork/" + LEGEND_ART[token.id];
+      src = LEGEND_ART[token.id];
       label = esc(token.name) + ", Legendary artwork";
     } else {
       src = baseFor(token);
