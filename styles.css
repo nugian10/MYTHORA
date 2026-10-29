@@ -62,10 +62,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .main-nav a[aria-current="page"] { background: var(--card2); color: var(--gold); }
 .main-nav a:hover { background: var(--card2); }
 .wallet-box { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.demo-badge {
-  background: #123b35; color: var(--teal); border: 1px solid #2dd4bf;
-  padding: .2rem .5rem; border-radius: 999px; font-size: .78rem; font-weight: 700; letter-spacing: .06em;
-}
+.mint-status { margin: .8rem 0; }
+.mint-status-error { color: var(--danger); font-weight: 700; }
+.mint-status-ok { color: var(--ok); font-weight: 700; }
+.mint-address { word-break: break-all; }
 button, .button {
   font: inherit; cursor: pointer; border-radius: 999px; border: 1px solid transparent;
   padding: .6rem 1.05rem; font-weight: 700; text-decoration: none; display: inline-block;

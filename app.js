@@ -1,6 +1,8 @@
-/* Mythora reconstruction — client-side hash routing, demo simulation only.
- * No real wallet, no signing, no network calls, no BNB moves.
- * All state is in-memory for this browser session only. */
+/* Mythora reconstruction — client-side hash routing, real on-chain minting.
+ * The Mint box connects the visitor's own wallet and sends real mint()
+ * transactions to the deployed Mythora contract on BNB Smart Chain.
+ * Counters and prices are read live from the contract via public RPC.
+ * No seed phrase or private key is ever asked for or handled here. */
 (function () {
   "use strict";
 
@@ -8,16 +10,54 @@
   var tokensById = {};
   DATA.tokens.forEach(function (t) { tokensById[t.id] = t; });
 
+  /* Deployed contract (verified on-chain 29 Oct 2026; minting open). */
+  var CONTRACT_ADDRESS = "0x27Ba185e74b681c3e548D369C1B0792eD7D738a1";
+  var CHAIN_ID = 56;
+  var RPC_URLS = [
+    "https://bsc.publicnode.com",
+    "https://bsc-dataseed1.binance.org",
+    "https://bsc-dataseed1.defibit.io"
+  ];
+  var MINT_ABI = [
+    "function totalMinted() view returns (uint256)",
+    "function remainingSupply() view returns (uint256)",
+    "function mintActive() view returns (bool)",
+    "function mintPrice(uint256 quantity) view returns (uint256)",
+    "function MAX_SUPPLY() view returns (uint256)",
+    "function mint(uint256 quantity) payable",
+    "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
+  ];
+  var MAX_QTY = 20; // UI-only cap per transaction; the contract has no cap.
+  var ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
   var state = {
     wallet: null, // { address, truncated }
-    freeMinted: 2, // the two pre-minted tokens count in the Free pool
-    paidMinted: 0,
+    wrongChain: false,
+    noProvider: false,
     sessionMintedIds: [],
     lastMintedIds: [],
+    lastTxHash: null,
+    mintPending: false,
+    mintMessage: null, // { kind: "info"|"ok"|"error", text, txHash }
+    priceWei: null, // decimal string for the current quantity, null = unknown
+    priceLoading: false,
+    priceError: false,
     votes: { "celestial-kitsune": 0, "raijin-dragon": 0, "moonlit-yuki-onna": 0 },
     currentVote: null,
     mintQty: 1,
     gallery: { rarity: "all", status: "all", search: "", visible: 24 }
+  };
+
+  /* Live chain state, read via public RPC. No wallet needed for reading. */
+  var chainState = {
+    loaded: false,
+    loading: false,
+    error: false,
+    loadedAt: 0,
+    totalMinted: null,
+    remaining: null,
+    cap: 3810,
+    active: null
   };
 
   function esc(s) {
@@ -45,24 +85,14 @@
 
   function truncated(address) { return address.slice(0, 6) + "…" + address.slice(-4); }
 
-  function connectDemoWallet() {
-    var bytes = new Uint8Array(20);
-    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
-    else for (var i = 0; i < 20; i++) bytes[i] = Math.floor(Math.random() * 256);
-    var hex = Array.prototype.map.call(bytes, function (b) {
-      return ("0" + b.toString(16)).slice(-2);
-    }).join("");
-    var address = "0x" + hex;
-    state.wallet = { address: address, truncated: truncated(address) };
-    render();
-    announce("Demo wallet connected. This is a simulation address only.");
-  }
-
-  function disconnectWallet() {
-    state.wallet = null;
-    state.lastMintedIds = [];
-    render();
-    announce("Demo wallet disconnected.");
+  /* Format a wei amount (decimal string) as BNB, e.g. "0.00005". */
+  function fmtWei(weiStr) {
+    var w = BigInt(weiStr);
+    var whole = w / 1000000000000000000n;
+    var frac = w % 1000000000000000000n;
+    if (frac === 0n) return whole.toString();
+    var f = frac.toString().padStart(18, "0").replace(/0+$/, "");
+    return whole.toString() + "." + f;
   }
 
   function announce(msg) {
@@ -70,21 +100,208 @@
     if (live) live.textContent = msg;
   }
 
+  /* ---------------- Live chain reads (public RPC, no wallet) ---------------- */
+
+  var readContract = null;
+  var readContractPromise = null;
+
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error("RPC timeout")); }, ms);
+      })
+    ]);
+  }
+
+  function getReadContract() {
+    if (readContract) return Promise.resolve(readContract);
+    if (readContractPromise) return readContractPromise;
+    if (typeof ethers === "undefined") {
+      return Promise.reject(new Error("Wallet library did not load."));
+    }
+    readContractPromise = (function tryNext(i) {
+      if (i >= RPC_URLS.length) throw new Error("No public RPC answered.");
+      var provider = new ethers.JsonRpcProvider(RPC_URLS[i]);
+      return withTimeout(provider.getBlockNumber(), 10000).then(function () {
+        readContract = new ethers.Contract(CONTRACT_ADDRESS, MINT_ABI, provider);
+        return readContract;
+      }).catch(function () { return tryNext(i + 1); });
+    })(0).catch(function (e) {
+      readContractPromise = null;
+      throw e;
+    });
+    return readContractPromise;
+  }
+
+  function loadChainState(force) {
+    if (chainState.loading) return Promise.resolve();
+    if (chainState.loaded && !force) return Promise.resolve();
+    chainState.loading = true;
+    return getReadContract().then(function (c) {
+      return Promise.all([c.totalMinted(), c.remainingSupply(), c.MAX_SUPPLY(), c.mintActive()]);
+    }).then(function (res) {
+      chainState.totalMinted = Number(res[0]);
+      chainState.remaining = Number(res[1]);
+      chainState.cap = Number(res[2]);
+      chainState.active = !!res[3];
+      chainState.loaded = true;
+      chainState.error = false;
+      chainState.loadedAt = Date.now();
+    }).catch(function () {
+      chainState.error = true;
+      chainState.loaded = false;
+    }).then(function () {
+      chainState.loading = false;
+      syncChainUi();
+    });
+  }
+
+  /* Update every chain-dependent number already on the page, in place,
+   * so a late RPC answer never jumps the user's scroll position. */
+  function syncChainUi() {
+    var mintedText = chainState.error ? "—" : (chainState.totalMinted == null ? "…" : String(chainState.totalMinted));
+    var remainingText = chainState.error ? "—" : (chainState.remaining == null ? "…" : String(chainState.remaining));
+    $all('[data-counter="minted"]').forEach(function (el) { el.textContent = mintedText; });
+    $all('[data-counter="remaining"]').forEach(function (el) { el.textContent = remainingText; });
+    $all('[data-live="totalMinted"]').forEach(function (el) { el.textContent = mintedText; });
+    $all('[data-live="mintActive"]').forEach(function (el) {
+      el.textContent = chainState.error ? "—" : (chainState.active == null ? "…" : (chainState.active ? "On (mintActive is true)" : "Off (mintActive is false)"));
+    });
+    var retry = $("#chain-retry");
+    if (retry) retry.style.display = chainState.error ? "" : "none";
+    var totalsNote = $("#mint-totals-note");
+    if (totalsNote) totalsNote.style.display = chainState.error ? "" : "none";
+    updateMintButton();
+  }
+
+  /* ---------------- Wallet (visitor's own wallet, injected provider) ---------------- */
+
+  function getWalletProvider() {
+    if (typeof window.ethereum !== "undefined") return window.ethereum;
+    if (typeof window.binancew3w !== "undefined" && window.binancew3w.ethereum) return window.binancew3w.ethereum;
+    return null;
+  }
+
+  function attachWalletListeners(wp) {
+    if (!wp || !wp.on || wp.__mythoraListeners) return;
+    wp.__mythoraListeners = true;
+    wp.on("accountsChanged", function (accounts) {
+      if (!accounts || !accounts.length) {
+        disconnectWallet();
+      } else {
+        state.wallet = { address: accounts[0], truncated: truncated(accounts[0]) };
+        render();
+        refreshPrice();
+      }
+    });
+    wp.on("chainChanged", function () {
+      refreshWalletChain().then(function () { render(); refreshPrice(); });
+    });
+  }
+
+  function refreshWalletChain() {
+    var wp = getWalletProvider();
+    if (!wp || !state.wallet) { state.wrongChain = false; return Promise.resolve(); }
+    return wp.request({ method: "eth_chainId" }).then(function (chainIdHex) {
+      state.wrongChain = parseInt(chainIdHex, 16) !== CHAIN_ID;
+    }).catch(function () { state.wrongChain = false; });
+  }
+
+  function switchToBsc() {
+    var wp = getWalletProvider();
+    if (!wp) return Promise.resolve();
+    return wp.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0x38" }]
+    }).catch(function (e) {
+      if (e && e.code === 4902) {
+        return wp.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: "0x38",
+            chainName: "BNB Smart Chain",
+            nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+            rpcUrls: ["https://bsc-dataseed.binance.org/"],
+            blockExplorerUrls: ["https://bscscan.com"]
+          }]
+        });
+      }
+      throw e;
+    }).then(function () {
+      state.wrongChain = false;
+      render();
+      refreshPrice();
+    }).catch(function (e) {
+      if (e && e.code === 4001) {
+        announce("Network switch cancelled in the wallet.");
+      } else {
+        announce("Could not switch networks. Switch to BNB Smart Chain in your wallet and try again.");
+      }
+    });
+  }
+
+  function connectWallet() {
+    var wp = getWalletProvider();
+    if (!wp) {
+      state.noProvider = true;
+      render();
+      announce("No wallet found in this browser. Open this site in your wallet app's browser to mint.");
+      return;
+    }
+    state.noProvider = false;
+    announce("Waiting for approval in your wallet…");
+    wp.request({ method: "eth_requestAccounts" }).then(function (accounts) {
+      if (!accounts || !accounts.length) throw new Error("No account returned.");
+      state.wallet = { address: accounts[0], truncated: truncated(accounts[0]) };
+      attachWalletListeners(wp);
+      return refreshWalletChain();
+    }).then(function () {
+      render();
+      refreshPrice();
+      announce("Wallet connected: " + state.wallet.truncated);
+    }).catch(function (e) {
+      if (e && e.code === 4001) {
+        announce("Connection cancelled in the wallet. Nothing was connected.");
+      } else {
+        announce("Could not connect the wallet. Open this site in your wallet app's browser and try again.");
+      }
+      render();
+    });
+  }
+
+  function disconnectWallet() {
+    state.wallet = null;
+    state.wrongChain = false;
+    state.lastMintedIds = [];
+    state.lastTxHash = null;
+    state.mintMessage = null;
+    render();
+    announce("Wallet disconnected.");
+  }
+
+  /* ---------------- Counters ---------------- */
+
   function counters() {
     return {
-      minted: state.freeMinted + state.paidMinted,
-      freeLeft: DATA.freeSupply - state.freeMinted,
-      paidLeft: DATA.paidSupply - state.paidMinted,
-      remaining: (DATA.freeSupply - state.freeMinted) + (DATA.paidSupply - state.paidMinted),
-      cap: DATA.cap
+      minted: chainState.totalMinted,
+      remaining: chainState.remaining,
+      cap: chainState.cap,
+      error: chainState.error,
+      loaded: chainState.loaded
     };
+  }
+
+  function displayNum(v, error) {
+    if (error) return "—";
+    return v == null ? "…" : String(v);
   }
 
   function countersHtml() {
     var c = counters();
     return '<div class="counters" aria-label="Collection counters">' +
-      '<div class="counter"><strong data-counter="minted">' + c.minted + '</strong><span>MINTED</span></div>' +
-      '<div class="counter"><strong data-counter="remaining">' + c.remaining + '</strong><span>REMAINING</span></div>' +
+      '<div class="counter"><strong data-counter="minted">' + displayNum(c.minted, c.error) + '</strong><span>MINTED</span></div>' +
+      '<div class="counter"><strong data-counter="remaining">' + displayNum(c.remaining, c.error) + '</strong><span>REMAINING</span></div>' +
       '<div class="counter"><strong>' + c.cap + '</strong><span>COLLECTION CAP</span></div>' +
       "</div>";
   }
@@ -136,13 +353,13 @@
     var box = $("#wallet-box");
     if (!box) return;
     if (state.wallet) {
-      box.innerHTML = '<span class="demo-badge">DEMO</span>' +
-        '<span aria-label="Connected demo address, truncated">' + esc(state.wallet.truncated) + "</span>" +
+      box.innerHTML =
+        '<span aria-label="Connected wallet address, truncated">' + esc(state.wallet.truncated) + "</span>" +
         '<button type="button" class="btn-ghost" id="disconnect-btn">Disconnect</button>';
       $("#disconnect-btn").addEventListener("click", disconnectWallet);
     } else {
-      box.innerHTML = '<button type="button" class="btn-primary" id="connect-btn">Connect Demo Wallet</button>';
-      $("#connect-btn").addEventListener("click", connectDemoWallet);
+      box.innerHTML = '<button type="button" class="btn-primary" id="connect-btn">Connect Wallet</button>';
+      $("#connect-btn").addEventListener("click", connectWallet);
     }
   }
 
@@ -157,7 +374,7 @@
       return "<tr><td>" + esc(r.name) + "</td><td>" + r.share + "</td><td>" + r.count + "</td><td>" + esc(r.weight) + "</td></tr>";
     }).join("");
     return '<div class="banner" role="note"><strong>CONTRACT DEPLOYED &bull; VERIFIED ON-CHAIN</strong>' +
-      "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting is open on-chain; the Mint box on this site remains a simulation.</p></div>" +
+      "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting is open on-chain. Connect your wallet to mint &mdash; every mint is a real on-chain transaction.</p></div>" +
       '<section class="cover" aria-label="Mythora cover">' +
       '<div class="cover-stars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
       '<p class="eyebrow">PERMANENT 3,810 CAP &bull; BNB SMART CHAIN</p>' +
@@ -189,69 +406,145 @@
       '<p><a class="button btn-primary" href="#/mint">Mint yours</a></p></section>';
   }
 
-  /* ---------------- Mint ---------------- */
-  function pickMintCandidates(count) {
-    var avail = DATA.tokens.filter(function (t) {
-      return t.status === "Available";
-    });
-    for (var i = avail.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = avail[i]; avail[i] = avail[j]; avail[j] = tmp;
-    }
-    return avail.slice(0, count);
-  }
-
-  /* Price by mint order: the first half of the collection (1,905) costs
-   * 0.00005 BNB each, the second half costs 0.0005 BNB each. */
-  function mintTotal(qty) {
-    var minted = counters().minted;
-    var cheap = Math.max(0, Math.min(qty, DATA.freeSupply - minted));
-    var rest = qty - cheap;
-    return cheap * DATA.freeMintFee + rest * DATA.paidMintPrice;
-  }
-
-  function fmtBnb(n) {
-    return String(parseFloat(n.toFixed(5)));
-  }
+  /* ---------------- Mint (real, on-chain) ---------------- */
 
   /* No reveal step: the minter gets the actual card right away, directly
-   * on this page. No question-mark card, no waiting, no dialog. */
+   * on this page. No question-mark card, no waiting, no dialog. The
+   * token ids come from the Transfer events in the mint receipt. */
   function mintedCardsHtml() {
     if (!state.lastMintedIds.length) return "";
     var cards = state.lastMintedIds.map(function (id) { return tokenCard(tokensById[id]); }).join("");
+    var txLine = state.lastTxHash
+      ? '<p>Transaction: <a href="https://bscscan.com/tx/' + esc(state.lastTxHash) + '" target="_blank" rel="noopener noreferrer">' + esc(state.lastTxHash) + "</a></p>"
+      : "";
     return '<section class="card" id="your-cards" aria-labelledby="your-cards-h"><h3 id="your-cards-h">Your card' + (state.lastMintedIds.length > 1 ? "s" : "") + "</h3>" +
-      "<p>You got your card right away &mdash; no question-mark card, no waiting. Pre-launch review &mdash; simulation, no real transaction, no BNB moves.</p>" +
+      "<p>You got your card right away &mdash; no question-mark card, no waiting. These are real tokens, minted on-chain to your wallet.</p>" +
+      txLine +
       '<div class="grid-3">' + cards + "</div></section>";
+  }
+
+  function mintMessageHtml() {
+    if (!state.mintMessage) return "";
+    var m = state.mintMessage;
+    var cls = m.kind === "error" ? "mint-status mint-status-error" : (m.kind === "ok" ? "mint-status mint-status-ok" : "mint-status");
+    var tx = m.txHash
+      ? ' <a href="https://bscscan.com/tx/' + esc(m.txHash) + '" target="_blank" rel="noopener noreferrer">View on BscScan</a>'
+      : "";
+    return '<p class="' + cls + '" id="mint-status" role="status">' + esc(m.text) + tx + "</p>";
+  }
+
+  function mintButtonState() {
+    if (state.mintPending) return { disabled: true, label: "Waiting for confirmation…" };
+    if (chainState.remaining === 0) return { disabled: true, label: "Sold out" };
+    if (chainState.loaded && chainState.active === false) return { disabled: true, label: "Minting is off" };
+    if (state.wrongChain) return { disabled: true, label: "Switch to BNB Smart Chain" };
+    if (!state.wallet) return { disabled: true, label: "Mint" };
+    if (state.priceLoading || state.priceError || state.priceWei == null) return { disabled: true, label: "Mint" };
+    if (chainState.remaining != null && state.mintQty > chainState.remaining) return { disabled: true, label: "Mint" };
+    if (!chainState.loaded && !chainState.error) return { disabled: true, label: "Mint" };
+    if (chainState.error) return { disabled: true, label: "Mint" };
+    return { disabled: false, label: "Mint" };
+  }
+
+  function updateMintButton() {
+    var btn = $("#mint-btn");
+    if (!btn) return;
+    var s = mintButtonState();
+    btn.disabled = s.disabled;
+    btn.textContent = s.label;
+    var minus = $("#qty-minus"), plus = $("#qty-plus");
+    var maxQty = MAX_QTY;
+    if (chainState.remaining != null) maxQty = Math.min(MAX_QTY, Math.max(1, chainState.remaining));
+    if (minus) minus.disabled = state.mintQty <= 1;
+    if (plus) plus.disabled = state.mintQty >= maxQty;
+  }
+
+  function updatePriceLine() {
+    var el = $("#price-line");
+    if (!el) return;
+    if (state.priceLoading) {
+      el.textContent = "Total: calculating…";
+    } else if (state.priceError) {
+      el.textContent = "Total: price unavailable. Check your connection and try again.";
+    } else if (state.priceWei != null) {
+      el.innerHTML = "Total: <strong>" + esc(fmtWei(state.priceWei)) + " BNB</strong> for " + state.mintQty + " token" + (state.mintQty === 1 ? "" : "s") + " (plus network gas, paid separately).";
+    } else {
+      el.textContent = "Total: …";
+    }
+  }
+
+  var priceSeq = 0;
+  function refreshPrice() {
+    var qty = state.mintQty;
+    var seq = ++priceSeq;
+    state.priceLoading = true;
+    state.priceError = false;
+    updatePriceLine();
+    updateMintButton();
+    getReadContract().then(function (c) {
+      return c.mintPrice(qty);
+    }).then(function (price) {
+      if (seq !== priceSeq) return;
+      state.priceWei = price.toString();
+      state.priceLoading = false;
+      updatePriceLine();
+      updateMintButton();
+    }).catch(function () {
+      if (seq !== priceSeq) return;
+      state.priceWei = null;
+      state.priceLoading = false;
+      state.priceError = true;
+      updatePriceLine();
+      updateMintButton();
+    });
+  }
+
+  function setMintMessage(kind, text, txHash) {
+    state.mintMessage = { kind: kind, text: text, txHash: txHash || null };
+    var slot = $("#mint-status-slot");
+    if (slot) slot.innerHTML = mintMessageHtml();
+    announce(text);
   }
 
   function mintView() {
     var c = counters();
-    var connected = !!state.wallet;
-    if (state.mintQty > c.remaining) state.mintQty = Math.max(1, c.remaining);
-    var notice = '<p class="notice">Pre-launch review &mdash; simulation, no real transaction, no BNB moves.</p>';
-    var walletNote = "";
-    if (!connected) {
-      walletNote = '<p class="notice">Connect the demo wallet to use the simulation. No real wallet is used here.</p>';
+    if (state.mintQty > MAX_QTY) state.mintQty = MAX_QTY;
+    if (c.remaining != null && state.mintQty > Math.max(1, c.remaining)) state.mintQty = Math.max(1, Math.min(MAX_QTY, c.remaining));
+    var totalsLine = '<p class="mint-totals" aria-label="Total item, sudah mint, dan sisa"><strong>Total Item:</strong> ' + c.cap + ' &nbsp;&middot;&nbsp; <strong>Sudah Mint:</strong> <span data-counter="minted">' + displayNum(c.minted, c.error) + '</span> &nbsp;&middot;&nbsp; <strong>Sisa:</strong> <span data-counter="remaining">' + displayNum(c.remaining, c.error) + "</span></p>" +
+      '<p class="notice" id="mint-totals-note" style="display:' + (c.error ? "" : "none") + '">The on-chain count could not be read. Check your connection. <button type="button" class="btn-ghost" id="chain-retry">Retry</button></p>';
+    var walletBlock;
+    if (state.wallet) {
+      walletBlock = '<p>Connected wallet: <span class="mint-address">' + esc(state.wallet.address) + "</span></p>" +
+        (state.wrongChain
+          ? '<p class="mint-status mint-status-error">Your wallet is not on BNB Smart Chain.</p><p><button type="button" class="btn-primary" id="switch-chain-btn">Switch to BNB Smart Chain</button></p>'
+          : "");
+    } else if (state.noProvider || getWalletProvider() == null) {
+      walletBlock = '<p class="notice">No wallet found in this browser. Open this site in your wallet app&rsquo;s browser (for example MetaMask or the Binance Web3 wallet) to mint. This page never asks for a seed phrase or private key.</p>';
+    } else {
+      walletBlock = '<p>Connect your wallet to mint. Your wallet signs the transaction; this page never asks for a seed phrase or private key.</p>' +
+        '<p><button type="button" class="btn-primary" id="mint-connect-btn">Connect Wallet</button></p>';
     }
-    var totalsLine = '<p class="mint-totals" aria-label="Total item, sudah mint, dan sisa"><strong>Total Item:</strong> ' + DATA.cap + ' &nbsp;&middot;&nbsp; <strong>Sudah Mint:</strong> ' + c.minted + ' &nbsp;&middot;&nbsp; <strong>Sisa:</strong> ' + c.remaining + "</p>";
     var oddsRows = DATA.rarity.map(function (r) {
       return "<tr><td>" + esc(r.name) + "</td><td>" + r.count + "</td><td>" + r.share + "</td></tr>";
     }).join("");
+    var s = mintButtonState();
     var mintPanel = '<div id="panel-mint">' +
       "<h3>Mint</h3>" +
       '<div class="qty-row"><label for="mint-qty-label">Quantity</label>' +
-      '<button type="button" id="qty-minus" aria-label="Decrease quantity" ' + ((!connected || state.mintQty <= 1) ? "disabled" : "") + ">&minus;</button>" +
+      '<button type="button" id="qty-minus" aria-label="Decrease quantity">&minus;</button>' +
       '<output id="mint-qty-label" aria-live="polite">' + state.mintQty + "</output>" +
-      '<button type="button" id="qty-plus" aria-label="Increase quantity" ' + ((!connected || state.mintQty >= c.remaining) ? "disabled" : "") + ">+</button>" +
+      '<button type="button" id="qty-plus" aria-label="Increase quantity">+</button>' +
+      '<span class="token-meta">Max ' + MAX_QTY + " per transaction</span>" +
       "</div>" +
-      '<button type="button" class="btn-primary" id="mint-btn" ' + ((!connected || c.remaining <= 0) ? "disabled" : "") + ">Simulate Mint &mdash; no real transaction</button>" +
+      '<p class="price-line" id="price-line">Total: …</p>' +
+      '<button type="button" class="btn-primary" id="mint-btn" ' + (s.disabled ? "disabled" : "") + ">" + esc(s.label) + "</button>" +
       "</div>";
     return '<section aria-labelledby="mint-h"><h2 id="mint-h">Mint Portal</h2>' +
-      "<p>You get your card right away. No question-mark card, no waiting.</p>" +
-      notice + walletNote + totalsLine + mintedCardsHtml() +
+      "<p>You get your card right away. No question-mark card, no waiting. Minting is open on-chain: the first 1,905 mints cost 0.00005 BNB each, then 0.0005 BNB each.</p>" +
+      walletBlock + totalsLine + '<div id="mint-status-slot">' + mintMessageHtml() + "</div>" + mintedCardsHtml() +
       '<div class="card" id="mint-box">' + mintPanel + "</div>" +
       '<div class="card odds"><h3>Your odds on every mint</h3>' +
-      "<p>Odds below are the collection counts. The draw is random in this simulation, and every remaining card &mdash; Legendary included &mdash; can be drawn.</p>" +
+      "<p>Odds below are the collection counts. Every mint draws a random remaining token id on-chain, and every remaining card &mdash; Legendary included &mdash; can be drawn.</p>" +
       "<table><thead><tr><th>Tier</th><th>Count</th><th>Share</th></tr></thead><tbody>" + oddsRows + "</tbody></table></div>" +
       '<p><a href="#/gallery">Browse the codex</a> &middot; <a href="#/transparency">Read the mint rules</a></p></section>';
   }
@@ -260,43 +553,129 @@
     var minus = $("#qty-minus");
     var plus = $("#qty-plus");
     if (minus) minus.addEventListener("click", function () {
-      if (state.mintQty > 1) { state.mintQty--; render(); }
+      if (state.mintQty > 1) { state.mintQty--; render(); refreshPrice(); }
     });
     if (plus) plus.addEventListener("click", function () {
-      if (state.mintQty < counters().remaining) { state.mintQty++; render(); }
+      var maxQty = MAX_QTY;
+      if (chainState.remaining != null) maxQty = Math.min(MAX_QTY, Math.max(1, chainState.remaining));
+      if (state.mintQty < maxQty) { state.mintQty++; render(); refreshPrice(); }
     });
+    var connectBtn = $("#mint-connect-btn");
+    if (connectBtn) connectBtn.addEventListener("click", connectWallet);
+    var switchBtn = $("#switch-chain-btn");
+    if (switchBtn) switchBtn.addEventListener("click", switchToBsc);
+    var retry = $("#chain-retry");
+    if (retry) retry.addEventListener("click", function () { loadChainState(true); refreshPrice(); });
     var mintBtn = $("#mint-btn");
-    if (mintBtn) mintBtn.addEventListener("click", function () { doMint(state.mintQty); });
+    if (mintBtn) mintBtn.addEventListener("click", function () { doRealMint(state.mintQty); });
+    updateMintButton();
+    refreshPrice();
   }
 
-  function doMint(qty) {
+  function mintErrorMessage(e) {
+    if (e && e.code === 4001) return "Cancelled in your wallet. No transaction was sent and nothing was charged.";
+    if (e && e.message === "WRONG_CHAIN") return "Your wallet is not on BNB Smart Chain. Switch networks and try again.";
+    if (e && e.message === "MINT_OFF") return "Minting is currently off.";
+    if (e && e.message === "SOLD_OUT") return "Not enough tokens left for that quantity.";
+    var msg = (e && e.message) ? String(e.message) : String(e);
+    if (/insufficient funds/i.test(msg)) return "Your wallet does not have enough BNB for this mint plus network gas.";
+    if (/incorrect payment/i.test(msg)) return "The contract rejected the payment amount. The price may have changed; try again.";
+    if (/exceeds max supply/i.test(msg)) return "That quantity exceeds the remaining supply.";
+    if (/minting is not active/i.test(msg)) return "Minting is currently off.";
+    return "Mint failed: " + msg.slice(0, 160);
+  }
+
+  function parseMintedIds(receipt, minterAddress, iface) {
+    var ids = [];
+    for (var i = 0; i < receipt.logs.length; i++) {
+      try {
+        var parsed = iface.parseLog(receipt.logs[i]);
+        if (parsed && parsed.name === "Transfer" &&
+            parsed.args.from.toLowerCase() === ZERO_ADDRESS &&
+            parsed.args.to.toLowerCase() === minterAddress.toLowerCase()) {
+          ids.push(Number(parsed.args.tokenId));
+        }
+      } catch (e) { /* log from another contract or event; ignore */ }
+    }
+    return ids;
+  }
+
+  function doRealMint(qty) {
+    if (state.mintPending) return;
     if (!state.wallet) {
-      announce("Connect the demo wallet first. Simulation only.");
+      setMintMessage("error", "Connect your wallet first.");
       return;
     }
-    var picked = pickMintCandidates(qty);
-    if (picked.length < qty) {
-      announce("Not enough tokens left for this simulation.");
+    if (typeof ethers === "undefined") {
+      setMintMessage("error", "The wallet library did not load. Reload the page and try again.");
       return;
     }
-    picked.forEach(function (t) {
-      t.status = "Minted";
-      t.owner = state.wallet.truncated;
-      t.mintedAt = "Demo session (simulation)";
-      state.sessionMintedIds.push(t.id);
-      if (t.pool === "free") state.freeMinted++;
-      else state.paidMinted++;
+    var wp = getWalletProvider();
+    if (!wp) {
+      setMintMessage("error", "No wallet found in this browser. Open this site in your wallet app's browser to mint.");
+      return;
+    }
+    state.mintPending = true;
+    updateMintButton();
+    setMintMessage("info", "Checking the contract…");
+    var provider = new ethers.BrowserProvider(wp);
+    var signer;
+    var writeContract;
+    provider.getSigner().then(function (s) {
+      signer = s;
+      return signer.getAddress();
+    }).then(function (minterAddress) {
+      return provider.getNetwork().then(function (net) {
+        if (Number(net.chainId) !== CHAIN_ID) throw new Error("WRONG_CHAIN");
+        writeContract = new ethers.Contract(CONTRACT_ADDRESS, MINT_ABI, signer);
+        return Promise.all([
+          writeContract.mintActive(),
+          writeContract.remainingSupply(),
+          writeContract.mintPrice(qty),
+          minterAddress
+        ]);
+      });
+    }).then(function (res) {
+      var active = res[0], remaining = res[1], price = res[2], minterAddress = res[3];
+      if (!active) throw new Error("MINT_OFF");
+      if (remaining < BigInt(qty)) throw new Error("SOLD_OUT");
+      return writeContract.mint.estimateGas(qty, { value: price }).then(function (est) {
+        var gasLimit = est * 120n / 100n; // 20% safety margin
+        setMintMessage("info", "Waiting for approval in your wallet… Check the quantity, price and network in your wallet before approving.");
+        return writeContract.mint(qty, { value: price, gasLimit: gasLimit });
+      }).then(function (tx) {
+        state.lastTxHash = tx.hash;
+        setMintMessage("info", "Transaction sent. Waiting for network confirmation…", tx.hash);
+        return tx.wait().then(function (receipt) {
+          return { receipt: receipt, minterAddress: minterAddress };
+        });
+      });
+    }).then(function (out) {
+      var iface = new ethers.Interface(MINT_ABI);
+      var ids = parseMintedIds(out.receipt, out.minterAddress, iface);
+      state.lastMintedIds = ids;
+      ids.forEach(function (id) { state.sessionMintedIds.push(id); });
+      if (ids.length) {
+        setMintMessage("ok", "Minted " + ids.length + " token" + (ids.length === 1 ? "" : "s") + ". Your card" + (ids.length === 1 ? " is" : "s are") + " below.", state.lastTxHash);
+      } else {
+        setMintMessage("ok", "Transaction confirmed. The token ids were not found in the receipt; check the transaction on BscScan.", state.lastTxHash);
+      }
+      state.mintPending = false;
+      loadChainState(true);
+      refreshPrice();
+      render();
+    }).catch(function (e) {
+      state.mintPending = false;
+      setMintMessage("error", mintErrorMessage(e));
+      updateMintButton();
     });
-    state.lastMintedIds = picked.map(function (t) { return t.id; });
-    render();
-    announce("Minted " + picked.length + " token(s) in simulation. Counters updated.");
   }
 
   function galleryView(query, isNavigation) {
     if (isNavigation) {
       // Arriving via a link resets the filters; a rarity query applies it.
-      // Re-renders caused by state changes (e.g. connecting the demo
-      // wallet) preserve the filters the user already chose.
+      // Re-renders caused by state changes (e.g. connecting a wallet)
+      // preserve the filters the user already chose.
       state.gallery.status = "all";
       state.gallery.search = "";
       state.gallery.visible = 24;
@@ -388,10 +767,10 @@
       (t.role ? "<p>" + esc(t.role) + ".</p>" : "") +
       "<ul class=\"trait-list\">" + traits + "</ul>" +
       "<dl><dt>Status</dt><dd>" + esc(t.status) + "</dd>" +
-      "<dt>Owner</dt><dd>" + (t.owner ? esc(t.owner) + ' <span class="demo-badge">DEMO</span>' : "—") + "</dd>" +
+      "<dt>Owner</dt><dd>—</dd>" +
             "<dt>Minted</dt><dd>" + esc(t.mintedAt || (t.preMinted ? "Before this reconstruction session (date not verified)" : "—")) + "</dd></dl>" +
       (t.status === "Available"
-        ? '<p><a class="button btn-primary" href="#/mint">Mint in simulation</a></p>'
+        ? '<p><a class="button btn-primary" href="#/mint">Mint now</a></p>'
         : "") +
       '<p><a href="https://x.com/intent/post?text=' + encodeURIComponent("Mythora #" + t.id + " — " + t.name + " from the Mythora collection.") + '" target="_blank" rel="noopener noreferrer">Share on X</a></p>' +
       "</div></div></section>";
@@ -399,6 +778,7 @@
 
   /* ---------------- Transparency ---------------- */
   function transparencyView() {
+    var c = counters();
     return '<section aria-labelledby="trans-h"><h2 id="trans-h">Transparency</h2>' +
       "<p>The permanent cap: <strong>3,810</strong>. The stated maximum supply is a constant in the displayed contract design. No function in that design can raise it.</p>" +
       '<div class="card"><h3>Fixed allocation (as claimed)</h3>' +
@@ -411,8 +791,8 @@
       DATA.rarity.map(function (r) { return "<tr><td>" + esc(r.name) + "</td><td>" + r.count + "</td><td>" + r.share + "</td><td>" + esc(r.weight) + "</td></tr>"; }).join("") +
       "</tbody></table></div>" +
       '<div class="card"><h3>Mint mechanism</h3>' +
-      "<p>One Mint flow for the whole collection: 3,810 tokens, no per-wallet limit in this reconstruction, per the owner&apos;s decision. Cards are drawn at random, including the Legendary cards. No mystery box: the card you get is picked at random from the unminted allocation at mint, with artwork, traits and edition shown right away.</p>" +
-      "<p>Price follows the owner&apos;s rule: the first 1,905 tokens minted cost 0.00005 BNB each, and the remaining 1,905 cost 0.0005 BNB each. The displayed contract design described per-wallet limits; those limits are not applied here, and the contract design must be changed and re-checked before any real deploy if the no-limit rule is to stand.</p></div>" +
+      "<p>One Mint flow for the whole collection: 3,810 tokens, no per-wallet limit in the deployed contract, per the owner&apos;s decision. Cards are drawn at random, including the Legendary cards. No mystery box: the card you get is picked at random from the unminted allocation at mint, with artwork, traits and edition shown right away.</p>" +
+      "<p>Price follows the owner&apos;s rule: the first 1,905 tokens minted cost 0.00005 BNB each, and the remaining 1,905 cost 0.0005 BNB each. The displayed contract design described per-wallet limits; the deployed contract has no per-wallet limits, per the owner&apos;s decision.</p></div>" +
       '<div class="card"><h3>Fee breakdown</h3>' +
       "<p><strong>Free tier:</strong> 0 BNB price + a flat 0.00005 BNB mint fee sent to the creator, plus the normal BNB Chain network gas paid separately. The flat fee is a creator fee, not the network gas alone.</p>" +
       "<p><strong>Paid tier:</strong> 0.0005 BNB per token. All mint revenue is described as forwarded straight to the creator payout wallet in the same transaction.</p>" +
@@ -426,8 +806,8 @@
       "<dt>Deployer / owner</dt><dd><span class=\"address\">0x0262e8e5E4584D8AB840fD950a6E2E0A414d4097</span><br>The owner&apos;s &ldquo;My Wallet&rdquo;.</dd>" +
       "<dt>payoutWallet</dt><dd><span class=\"address\">0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7</span><br>The owner&apos;s Agentic Wallet. Mint proceeds go here.</dd>" +
       "<dt>MAX_SUPPLY</dt><dd>3,810</dd>" +
-      "<dt>Total minted</dt><dd>0</dd>" +
-      "<dt>Minting</dt><dd>On (mintActive is true)</dd>" +
+      "<dt>Total minted</dt><dd data-live=\"totalMinted\">" + displayNum(c.minted, c.error) + "</dd>" +
+      "<dt>Minting</dt><dd data-live=\"mintActive\">" + (c.error ? "—" : (c.active == null ? "…" : (c.active ? "On (mintActive is true)" : "Off (mintActive is false)"))) + "</dd>" +
       "<dt>Royalty</dt><dd>5% to the payout wallet (EIP-2981)</dd>" +
       "<dt>Verified on-chain</dt><dd>22:03 WIB, 29 Oct 2026. The deployed bytecode matches the verified contract draft.</dd></dl>" +
       "<p>No audit report or auditor name is claimed here: no independent audit exists. The full art set and metadata are pinned to IPFS (root CID <span class=\"address\">bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u</span>); view them via the <a href=\"https://ipfs.filebase.io/ipfs/bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/1\">Filebase gateway</a>. The contract baseURI is set on-chain (BaseURIUpdated event, <a href=\"https://bscscan.com/tx/0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e\" target=\"_blank\" rel=\"noopener noreferrer\">tx 0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e</a>). The BscScan link above points to the real deployed contract.</p></div>" +
@@ -435,7 +815,7 @@
       "<p>The code shown on the preview Transparency page (summarised here, not reproduced) used fixed constants for the 3,810 cap, the two 1,905 pools, the 0.00005 BNB free fee, the 0.0005 BNB paid price, and the per-wallet limits of 2 free and 10 paid. It named mint operations for the free pool (one token per call) and the paid pool (one to five per call), owner-only controls to switch minting on, change the metadata base address, and change the payout wallet, a safety withdrawal that always sends any stray balance to the payout wallet, and royalty handling. Minting was described as starting switched off, with a reentrancy guard on the mint operations and revenue forwarded in the same transaction.</p>" +
       "<p>What was not in the displayed design: no allowlist or phase logic, no on-chain randomness, and no on-chain enforcement of which rarity or pool a given token id belongs to &mdash; token ids ran in mint order, so rarity and pool mapping depended on off-chain metadata. The owner could also change the metadata base address and the payout wallet at any time in the displayed design, with no freeze or timelock shown.</p></div>" +
       '<div class="warning" role="note"><h3>Under review</h3>' +
-      "<p><strong>Voting functions were not present in the displayed contract.</strong> Voting is simulation only in this reconstruction. That claim is under review and must not be presented as a live contract feature. A decision is still needed for voting: remove the claim, postpone it, or build it separately. There is no Fusion feature: it was removed at the owner's request, and the revised contract draft has no fusion or burn functions.</p></div>" +
+      "<p><strong>Voting functions were not present in the displayed contract.</strong> Voting on this page is not recorded on-chain and is not a live contract feature. A decision is still needed for voting: remove the claim, postpone it, or build it separately. There is no Fusion feature: it was removed at the owner's request, and the revised contract draft has no fusion or burn functions.</p></div>" +
       '<div class="card"><h3>Launch checklist</h3><ol>' +
       "<li>Final creator review of this page and the allocation table.</li>" +
       "<li><strong>Done:</strong> deployed to BNB Smart Chain on 29 Oct 2026 (no testnet rehearsal, per the owner&apos;s decision) and verified on-chain.</li>" +
@@ -452,15 +832,15 @@
     var controls;
     if (!state.wallet) {
       controls = '<div class="callout"><p><strong>Hold a Mythora to vote.</strong></p>' +
-        '<p>Connect the demo wallet to see the simulated voting controls. No Vote button is shown until a demo wallet is connected.</p>' +
-        '<button type="button" class="btn-primary" id="gov-connect">Connect Demo Wallet</button></div>';
+        '<p>Connect your wallet to see the voting controls.</p>' +
+        '<button type="button" class="btn-primary" id="gov-connect">Connect Wallet</button></div>';
     } else if (!holds) {
       controls = '<div class="callout"><p><strong>Hold a Mythora to vote.</strong></p>' +
-        '<p>This demo wallet holds no Mythora token in this session yet.</p>' +
-        '<p><a class="button btn-primary" href="#/mint">Mint your first guardian (simulation)</a></p></div>';
+        '<p>This wallet holds no Mythora token in this session yet.</p>' +
+        '<p><a class="button btn-primary" href="#/mint">Mint your first guardian</a></p></div>';
     } else {
-      controls = '<div class="callout"><p><strong>Your voting power: 1</strong> &mdash; one wallet, one vote (simulation). Your session holding: ' + state.sessionMintedIds.length + ' token(s).</p>' +
-        "<p>Voting switches your single vote between proposals. This state is session-only and is not tied to a real wallet or contract.</p></div>";
+      controls = '<div class="callout"><p><strong>Your voting power: 1</strong> &mdash; one wallet, one vote. Your session holding: ' + state.sessionMintedIds.length + ' token(s).</p>' +
+        "<p>Votes on this page are counted in this browser session only and are not recorded on-chain.</p></div>";
     }
     var cards = DATA.proposals.map(function (p, idx) {
       var count = state.votes[p.slug];
@@ -482,7 +862,7 @@
 
   function bindGovernance() {
     var connectBtn = $("#gov-connect");
-    if (connectBtn) connectBtn.addEventListener("click", connectDemoWallet);
+    if (connectBtn) connectBtn.addEventListener("click", connectWallet);
     $all(".vote-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var proposal = DATA.proposals[parseInt(btn.getAttribute("data-index"), 10)];
@@ -537,12 +917,17 @@
     var heading = app.querySelector("h1, h2");
     if (heading) document.title = heading.textContent.trim() + " — Mythora (Reconstruction)";
     window.scrollTo(0, 0);
+    // Keep chain numbers fresh without hammering the RPC: refresh at
+    // most once a minute while the user navigates.
+    if (chainState.loaded && Date.now() - chainState.loadedAt > 60000) loadChainState(true);
+    else syncChainUi();
   }
 
   window.addEventListener("hashchange", render);
 
   // Exposed only for local verification of this reconstruction.
-  window.MYTHORA_TEST = { state: state, data: DATA, counters: counters, tokensById: tokensById };
+  window.MYTHORA_TEST = { state: state, data: DATA, counters: counters, tokensById: tokensById, chainState: chainState };
 
   render();
+  loadChainState();
 })();
