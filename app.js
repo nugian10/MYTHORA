@@ -198,8 +198,8 @@
     var rows = DATA.rarity.map(function (r) {
       return "<tr><td>" + esc(r.name) + "</td><td>" + r.share + "</td><td>" + r.count + "</td><td>" + esc(r.weight) + "</td></tr>";
     }).join("");
-    return '<div class="banner" role="note"><strong>CONTRACT READY &bull; PENDING REVIEW</strong>' +
-      "<p>Pre-launch audit mode &mdash; the Mythora contract is described as finalised and ready for deployment. Minting in this reconstruction runs in simulation against the stated allocation; nothing is live until the creator ignites the launch.</p></div>" +
+    return '<div class="banner" role="note"><strong>CONTRACT DEPLOYED &bull; VERIFIED ON-CHAIN</strong>' +
+      "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting stays off until the owner activates it; the Mint box on this site remains a simulation.</p></div>" +
       '<section class="cover" aria-label="Mythora cover">' +
       '<div class="cover-stars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
       '<p class="eyebrow">PERMANENT 3,810 CAP &bull; BNB SMART CHAIN</p>' +
