@@ -200,15 +200,10 @@
     intendedOwnerPayout: "0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7",
     xUrl: "https://x.com/MythoraNFT",
     rarity: [
-      { name: "Legendary", count: 12, share: "0.31%", weight: "10x" },
-      { name: "Epic", count: 186, share: "4.88%", weight: "4x" },
-      { name: "Rare", count: 612, share: "16.06%", weight: "2x" },
-      { name: "Common", count: 3000, share: "78.74%", weight: "1x" }
-    ],
-    proposals: [
-      { slug: "celestial-kitsune", name: "Celestial Kitsune, the Star Weaver" },
-      { slug: "raijin-dragon", name: "Raijin Dragon, the Thunder Drummer" },
-      { slug: "moonlit-yuki-onna", name: "Moonlit Yuki-onna, the Winter Queen" }
+      { name: "Legendary", count: 12, share: "0.31%" },
+      { name: "Epic", count: 186, share: "4.88%" },
+      { name: "Rare", count: 612, share: "16.06%" },
+      { name: "Common", count: 3000, share: "78.74%" }
     ],
     tokens: buildTokens()
   };

@@ -33,9 +33,6 @@
   var MINT_SELECTOR = "0xa0712d68";
 
   var state = {
-    sessionMintedIds: [],
-    votes: { "celestial-kitsune": 0, "raijin-dragon": 0, "moonlit-yuki-onna": 0 },
-    currentVote: null,
     gallery: { rarity: "all", status: "all", search: "", visible: 24 },
     checkWallet: null // { address, balance, bnb, error } from the last lookup
   };
@@ -280,7 +277,7 @@
     var tengu = tokensById[686];
     var marquee = legends.map(function (t) { return '<span class="cover-cell">' + artFor(t) + "</span>"; }).join("");
     var rows = DATA.rarity.map(function (r) {
-      return "<tr><td>" + esc(r.name) + "</td><td>" + r.share + "</td><td>" + r.count + "</td><td>" + esc(r.weight) + "</td></tr>";
+      return "<tr><td>" + esc(r.name) + "</td><td>" + r.share + "</td><td>" + r.count + "</td></tr>";
     }).join("");
     return '<div class="banner" role="note"><strong>CONTRACT DEPLOYED &bull; VERIFIED ON-CHAIN</strong>' +
       "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting is open on-chain. Your agent mints for you &mdash; this page only reads the chain.</p></div>" +
@@ -303,12 +300,11 @@
       '<div class="legend-grid">' + legends.map(tokenCard).join("") + "</div>" +
       '<p><a href="#/gallery?rarity=legendary">Meet all twelve &rarr;</a></p></section>' +
       '<section aria-labelledby="rarity-h"><h2 id="rarity-h">Rarity, published in full</h2>' +
-      "<p>The allocation was committed at genesis and can never change &mdash; every tier and every count, published. The gallery allocation outside the 12 Legends is generated deterministically and is not the original genesis table; see the gallery notice.</p>" +
-      '<div class="card"><table><thead><tr><th>Tier</th><th>Share</th><th>Count</th><th>Voting weight</th></tr></thead><tbody>' + rows + "</tbody></table></div></section>" +
+      "<p>The allocation was committed at genesis and can never change &mdash; every tier and every count, published. The gallery allocation outside the 12 Legends is generated deterministically and is not the original genesis table.</p>" +
+      '<div class="card"><div class="table-scroll"><table><thead><tr><th>Tier</th><th>Share</th><th>Count</th></tr></thead><tbody>' + rows + "</tbody></table></div></div></section>" +
       '<section aria-labelledby="utility-h"><h2 id="utility-h">Real utility, from day one</h2><div class="grid-3">' +
       '<div class="card"><h3>Holder community</h3><p>Planned: owning a Mythora is described as unlocking the holder community. No gated channels or holder-only links are provided on this site.</p></div>' +
-      '<div class="card"><h3>Vote the next design</h3><p>Holders decide which chibi the forges craft next. One weighted vote per wallet, switchable any time.</p><p><a href="#/governance">Open voting</a></p></div>' +
-      '<div class="card"><h3>Mythora on X</h3><p>Daily lore, drop alerts and holder-only events on the official profile.</p><p><a href="' + DATA.xUrl + '" target="_blank" rel="noopener noreferrer">Follow @MythoraNFT on X</a></p></div>' +
+            '<div class="card"><h3>Mythora on X</h3><p>Daily lore, drop alerts and holder-only events on the official profile.</p><p><a href="' + DATA.xUrl + '" target="_blank" rel="noopener noreferrer">Follow @MythoraNFT on X</a></p></div>' +
       "</div></section>" +
       '<section class="card" style="text-align:center"><h2>3,810. Forever. Nothing more.</h2>' +
       "<p>The cap is written into the contract and cannot be raised &mdash; scarcity you can verify, not a promise.</p>" +
@@ -493,7 +489,6 @@
       if (["legendary", "epic", "rare", "common"].indexOf(r2) !== -1) state.gallery.rarity = r2;
     }
     return '<section aria-labelledby="gallery-h"><h2 id="gallery-h">Gallery &mdash; The Codex</h2>' +
-      '<div class="notice"><strong>Gallery notice.</strong> Gallery data outside the 12 Legends and the 2 verified pre-minted tokens (#1953 Kinoko Spirit and #2496 Three-Tail Kitsune) is generated deterministically, not from the original genesis allocation table. Rarity counts are exact; individual names and traits for other tokens are generated deterministically. <strong>Art note:</strong> every card shows its own final artwork &mdash; 12 Legend artworks plus 3,798 detailed composites from 32 trait-layer bases, all pinned to IPFS. The written traits under each card match the artwork by construction.</div>' +
       '<form class="filters" id="gallery-filters" aria-label="Gallery filters">' +
       '<label for="filter-rarity">Rarity<select id="filter-rarity">' +
       [["all", "All"], ["legendary", "Legendary"], ["epic", "Epic"], ["rare", "Rare"], ["common", "Common"]].map(function (o) {
@@ -586,13 +581,13 @@
       "<p>The permanent cap: <strong>3,810</strong>. The stated maximum supply is a constant in the displayed contract design. No function in that design can raise it.</p>" +
       '<div class="card"><h3>Fixed allocation (as claimed)</h3>' +
       "<p>All 3,810 tokens &mdash; tier, pool and traits &mdash; were described as committed at genesis with seed 3810, so anyone could re-run the generator and verify the table. That generator was not available here, so the claim could not be independently verified.</p>" +
-      "<table><thead><tr><th>Pool</th><th>Legendary</th><th>Epic</th><th>Rare</th><th>Common</th><th>Total</th></tr></thead><tbody>" +
+      "<div class=\"table-scroll\"><table><thead><tr><th>Pool</th><th>Legendary</th><th>Epic</th><th>Rare</th><th>Common</th><th>Total</th></tr></thead><tbody>" +
       "<tr><td>Free Mint</td><td>0</td><td>93</td><td>306</td><td>1,506</td><td>1,905</td></tr>" +
       "<tr><td>Paid Mint</td><td>12</td><td>93</td><td>306</td><td>1,494</td><td>1,905</td></tr>" +
-      "</tbody></table></div>" +
-      '<div class="card"><h3>Rarity rules</h3><table><thead><tr><th>Tier</th><th>Count</th><th>Share</th><th>Voting weight</th></tr></thead><tbody>' +
-      DATA.rarity.map(function (r) { return "<tr><td>" + esc(r.name) + "</td><td>" + r.count + "</td><td>" + r.share + "</td><td>" + esc(r.weight) + "</td></tr>"; }).join("") +
-      "</tbody></table></div>" +
+      "</tbody></table></div></div>" +
+      '<div class="card"><h3>Rarity rules</h3><div class="table-scroll"><table><thead><tr><th>Tier</th><th>Count</th><th>Share</th></tr></thead><tbody>' +
+      DATA.rarity.map(function (r) { return "<tr><td>" + esc(r.name) + "</td><td>" + r.count + "</td><td>" + r.share + "</td></tr>"; }).join("") +
+      "</tbody></table></div></div>" +
       '<div class="card"><h3>Mint mechanism</h3>' +
       "<p>One Mint flow for the whole collection: 3,810 tokens, no per-wallet limit in the deployed contract, per the owner&apos;s decision. Cards are drawn at random, including the Legendary cards. No mystery box: the card you get is picked at random from the unminted allocation at mint, with artwork, traits and edition shown right away.</p>" +
       "<p>Price follows the owner&apos;s rule: the first 1,905 tokens minted cost 0.00005 BNB each, and the remaining 1,905 cost 0.0005 BNB each. The displayed contract design described per-wallet limits; the deployed contract has no per-wallet limits, per the owner&apos;s decision.</p></div>" +
@@ -618,7 +613,7 @@
       "<p>The code shown on the preview Transparency page (summarised here, not reproduced) used fixed constants for the 3,810 cap, the two 1,905 pools, the 0.00005 BNB free fee, the 0.0005 BNB paid price, and the per-wallet limits of 2 free and 10 paid. It named mint operations for the free pool (one token per call) and the paid pool (one to five per call), owner-only controls to switch minting on, change the metadata base address, and change the payout wallet, a safety withdrawal that always sends any stray balance to the payout wallet, and royalty handling. Minting was described as starting switched off, with a reentrancy guard on the mint operations and revenue forwarded in the same transaction.</p>" +
       "<p>What was not in the displayed design: no allowlist or phase logic, no on-chain randomness, and no on-chain enforcement of which rarity or pool a given token id belongs to &mdash; token ids ran in mint order, so rarity and pool mapping depended on off-chain metadata. The owner could also change the metadata base address and the payout wallet at any time in the displayed design, with no freeze or timelock shown.</p></div>" +
       '<div class="warning" role="note"><h3>Under review</h3>' +
-      "<p><strong>Voting functions were not present in the displayed contract.</strong> Voting on this page is not recorded on-chain and is not a live contract feature. A decision is still needed for voting: remove the claim, postpone it, or build it separately. There is no Fusion feature: it was removed at the owner's request, and the revised contract draft has no fusion or burn functions.</p></div>" +
+      "<p>There is no Fusion feature: it was removed at the owner's request, and the revised contract draft has no fusion or burn functions.</p></div>" +
       '<div class="card"><h3>Launch checklist</h3><ol>' +
       "<li>Final creator review of this page and the allocation table.</li>" +
       "<li><strong>Done:</strong> deployed to BNB Smart Chain on 29 Oct 2026 (no testnet rehearsal, per the owner&apos;s decision) and verified on-chain.</li>" +
@@ -627,54 +622,6 @@
       "<li><strong>Done:</strong> owner called setMintActive on 29 Oct 2026 \u2014 the drop is live (<a href=\"https://bscscan.com/tx/0xbd71bc2ff0953b6707830a628693315cb746b678d55f4103506fc6cc9ae4b0e8\" target=\"_blank\" rel=\"noopener noreferrer\">tx 0xbd71bc2ff0953b6707830a628693315cb746b678d55f4103506fc6cc9ae4b0e8</a>).</li>" +
       "</ol><p>The contract is deployed, the baseURI is set, and minting is open. No independent audit exists.</p></div>" +
       '<div class="card"><h3>Metadata standard</h3><p>Every token exposes standard ERC-721 metadata JSON &mdash; name, description, image and attributes. The full set is pinned to IPFS at root CID <span class="address">bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u</span> (gateway: <a href="https://ipfs.filebase.io/ipfs/bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/1">metadata/1</a>). The baseURI is set on-chain to <span class="address">ipfs://bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/</span> (BaseURIUpdated event, <a href=\"https://bscscan.com/tx/0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e\" target=\"_blank\" rel=\"noopener noreferrer\">tx 0xeb46f1cbfd65f748870955993358ded54e9f1b7b66856ac2073b66dfaa7ef39e</a>).</p></div></section>';
-  }
-
-  /* ---------------- Governance ---------------- */
-  function governanceView() {
-    var holds = state.sessionMintedIds.length > 0;
-    var controls;
-    if (!state.wallet) {
-      controls = '<div class="callout"><p><strong>Hold a Mythora to vote.</strong></p>' +
-        "<p>This page never connects to a wallet, so it cannot check holdings. Votes here are counted in this browser session only and are not recorded on-chain.</p></div>";
-    } else if (!holds) {
-      controls = '<div class="callout"><p><strong>Hold a Mythora to vote.</strong></p>' +
-        '<p>This wallet holds no Mythora token in this session yet.</p>' +
-        '<p><a class="button btn-primary" href="#/mint">Mint your first guardian</a></p></div>';
-    } else {
-      controls = '<div class="callout"><p><strong>Your voting power: 1</strong> &mdash; one wallet, one vote. Your session holding: ' + state.sessionMintedIds.length + ' token(s).</p>' +
-        "<p>Votes on this page are counted in this browser session only and are not recorded on-chain.</p></div>";
-    }
-    var cards = DATA.proposals.map(function (p, idx) {
-      var count = state.votes[p.slug];
-      var voted = state.currentVote === p.slug;
-      var canVote = !!(state.wallet && holds);
-      return '<div class="card"><h3>' + esc(p.name) + "</h3>" +
-        '<p class="vote-count" aria-live="polite">' + count + ' vote' + (count === 1 ? "" : "s") + "</p>" +
-        (voted ? '<p><span class="pill pill-minted">VOTED</span> You voted for this proposal.</p>' : "") +
-        (canVote ? '<button type="button" class="btn-primary vote-btn" data-index="' + idx + '">Vote</button>' : "") +
-        "</div>";
-    }).join("");
-    return '<section aria-labelledby="gov-h"><h2 id="gov-h">Design Voting</h2>' +
-      "<p>Holders decide what the forges craft next.</p>" +
-      "<p>Weights: Legendary 10x &middot; Epic 4x &middot; Rare 2x &middot; Common 1x. No deadline, proposal id, or winner history is shown, because none was verified.</p>" +
-      controls +
-      '<div class="grid-3" style="margin-top:1rem">' + cards + "</div>" +
-      '<section class="card" style="margin-top:1rem"><h3>Holder community</h3><p>Planned. No gated channels, links, or holder-only interface are provided on this site.</p></section></section>';
-  }
-
-  function bindGovernance() {
-    $all(".vote-btn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var proposal = DATA.proposals[parseInt(btn.getAttribute("data-index"), 10)];
-        if (!proposal) return;
-        var slug = proposal.slug;
-        if (state.currentVote) state.votes[state.currentVote]--;
-        state.votes[slug]++;
-        state.currentVote = slug;
-        render();
-        announce("Voted for " + proposal.name + ".");
-      });
-    });
   }
 
   /* ---------------- Not found ---------------- */
@@ -707,9 +654,6 @@
       app.innerHTML = tokenView(path.replace("/nft/", ""));
     } else if (path === "/transparency") {
       app.innerHTML = transparencyView();
-    } else if (path === "/governance") {
-      app.innerHTML = governanceView();
-      bindGovernance();
     } else {
       app.innerHTML = notFoundView();
     }

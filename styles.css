@@ -101,9 +101,6 @@ h3 { margin-bottom: .3rem; }
   padding: .9rem 1rem; margin: 1rem 0;
 }
 .notice strong { color: var(--gold); }
-.callout {
-  background: #132a26; border: 1px solid #2dd4bf; border-radius: var(--radius); padding: .9rem 1rem;
-}
 .warning { background: #2b1420; border: 1px solid var(--rose); border-radius: var(--radius); padding: .9rem 1rem; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); }
@@ -162,8 +159,6 @@ footer {
   padding: 1.6rem 1rem 2.2rem; font-size: .92rem;
 }
 footer p { margin: .25rem 0; }
-.vote-row { display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.vote-count { font-size: 1.5rem; font-weight: 800; }
 @media (max-width: 720px) {
   .counters { grid-template-columns: repeat(2, 1fr); }
   .grid-3, .legend-grid, .gallery-grid, .grid-2 { grid-template-columns: 1fr; }
@@ -268,3 +263,18 @@ footer p { margin: .25rem 0; }
 @media (prefers-reduced-motion: reduce) {
   .cover, .cover-title, .cover-stars span, .float-card, .cover-track { animation: none; }
 }
+
+/* Long identifiers wrap inside their containers: no horizontal page overflow.
+ * Full text stays visible and clickable; nothing is truncated or hidden. */
+html, body { overflow-x: clip; }
+a { overflow-wrap: anywhere; }
+.card, .notice, .warning, footer, .banner, .token-card { min-width: 0; }
+.card p, .card dd, .card li, .card td, .card th,
+footer p, .banner p, .token-meta { overflow-wrap: anywhere; word-break: break-word; }
+.card a, footer a, .banner a { word-break: break-all; }
+.address { overflow-wrap: anywhere; }
+.grid-3 > *, .grid-2 > *, .legend-grid > *, .gallery-grid > *, .counters > * { min-width: 0; }
+.code-block { max-width: 100%; min-width: 0; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+input, select { max-width: 100%; }
+img { max-width: 100%; }
