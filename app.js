@@ -459,15 +459,20 @@
       "<p><strong>Free tier:</strong> 0 BNB price + a flat 0.00005 BNB mint fee sent to the creator, plus the normal BNB Chain network gas paid separately. The flat fee is a creator fee, not the network gas alone.</p>" +
       "<p><strong>Paid tier:</strong> 0.0005 BNB per token. All mint revenue is described as forwarded straight to the creator payout wallet in the same transaction.</p>" +
       "<p><strong>Secondary sales:</strong> 5% EIP-2981 royalty to the same creator wallet.</p></div>" +
-      '<div class="card"><h3>The contract &mdash; facts shown</h3>' +
-      "<dl><dt>Status</dt><dd><strong>READY &mdash; PENDING FINAL REVIEW</strong></dd>" +
-      "<dt>Name / Symbol</dt><dd>Mythora (MYTH)</dd>" +
+      '<div class="card"><h3>Deployed contract</h3>' +
+      "<dl><dt>Status</dt><dd><strong>DEPLOYED &mdash; VERIFIED ON-CHAIN</strong></dd>" +
+      "<dt>Contract address</dt><dd><span class=\"address\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</span><br><a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\">View on BscScan</a></dd>" +
       "<dt>Network</dt><dd>BNB Smart Chain &middot; Chain 56</dd>" +
+      "<dt>Name / Symbol</dt><dd>Mythora (MYTH)</dd>" +
       "<dt>Standard</dt><dd>ERC-721 + EIP-2981</dd>" +
-      "<dt>Royalty</dt><dd>5%</dd>" +
-      "<dt>Contract address</dt><dd>Published here at launch</dd>" +
-      "<dt>Intended owner + payout</dt><dd><span class=\"address\">" + esc(DATA.intendedOwnerPayout) + "</span><br><strong>INTENDED, NOT DEPLOYED, NOT VERIFIED ON-CHAIN AS PAYOUT.</strong> This address was supplied by the owner for review. No contract has been deployed with it in this reconstruction, and no on-chain payout has been verified.</dd></dl>" +
-      "<p>No audit report, auditor name, IPFS link, or BscScan link is invented here. None was shown on the preview site.</p></div>" +
+      "<dt>Deployer / owner</dt><dd><span class=\"address\">0x0262e8e5E4584D8AB840fD950a6E2E0A414d4097</span><br>The owner&apos;s &ldquo;My Wallet&rdquo;.</dd>" +
+      "<dt>payoutWallet</dt><dd><span class=\"address\">0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7</span><br>The owner&apos;s Agentic Wallet. Mint proceeds go here.</dd>" +
+      "<dt>MAX_SUPPLY</dt><dd>3,810</dd>" +
+      "<dt>Total minted</dt><dd>0</dd>" +
+      "<dt>Minting</dt><dd>Off (mintActive is false)</dd>" +
+      "<dt>Royalty</dt><dd>5% to the payout wallet (EIP-2981)</dd>" +
+      "<dt>Verified on-chain</dt><dd>22:03 WIB, 29 Oct 2026. The deployed bytecode matches the verified contract draft.</dd></dl>" +
+      "<p>No audit report or auditor name is claimed here: no independent audit exists. No IPFS link is claimed: the art and metadata are not yet pinned. The BscScan link above points to the real deployed contract.</p></div>" +
       '<div class="card"><h3>Displayed contract, summarised in plain words</h3>' +
       "<p>The code shown on the preview Transparency page (summarised here, not reproduced) used fixed constants for the 3,810 cap, the two 1,905 pools, the 0.00005 BNB free fee, the 0.0005 BNB paid price, and the per-wallet limits of 2 free and 10 paid. It named mint operations for the free pool (one token per call) and the paid pool (one to five per call), owner-only controls to switch minting on, change the metadata base address, and change the payout wallet, a safety withdrawal that always sends any stray balance to the payout wallet, and royalty handling. Minting was described as starting switched off, with a reentrancy guard on the mint operations and revenue forwarded in the same transaction.</p>" +
       "<p>What was not in the displayed design: no allowlist or phase logic, no on-chain randomness, and no on-chain enforcement of which rarity or pool a given token id belongs to &mdash; token ids ran in mint order, so rarity and pool mapping depended on off-chain metadata. The owner could also change the metadata base address and the payout wallet at any time in the displayed design, with no freeze or timelock shown.</p></div>" +
@@ -475,11 +480,11 @@
       "<p><strong>Voting functions were not present in the displayed contract.</strong> Voting is simulation only in this reconstruction. That claim is under review and must not be presented as a live contract feature. A decision is still needed for voting: remove the claim, postpone it, or build it separately. There is no Fusion feature: it was removed at the owner's request, and the revised contract draft has no fusion or burn functions.</p></div>" +
       '<div class="card"><h3>Launch checklist</h3><ol>' +
       "<li>Final creator review of this page and the allocation table.</li>" +
-      "<li>Deploy to BNB Smart Chain (rehearsal on BSC Testnet first).</li>" +
+      "<li><strong>Done:</strong> deployed to BNB Smart Chain on 29 Oct 2026 (no testnet rehearsal, per the owner&apos;s decision) and verified on-chain.</li>" +
       "<li>Pin the full art set + metadata to IPFS.</li>" +
-      "<li>Verify source on BscScan and publish the address on this page.</li>" +
-      "<li>Owner calls setMintActive &mdash; the drop is live.</li>" +
-      "</ol><p>Deployment is on hold pending the owner's review. No step in this checklist has been carried out by this reconstruction.</p></div>" +
+      "<li>Verify the contract source on BscScan.</li>" +
+      "<li>Owner calls setMintActive &mdash; the drop is live. Minting stays off until then.</li>" +
+      "</ol><p>The contract is deployed, but minting stays off until the owner completes the remaining steps. No independent audit exists.</p></div>" +
       '<div class="card"><h3>Metadata standard</h3><p>Every token exposes standard ERC-721 metadata JSON &mdash; name, description, image and attributes. In the preview, sample metadata used local art paths; the launched collection is described as pinning images and JSON to IPFS with the contract base address pointing there. No IPFS link is claimed here.</p></div></section>';
   }
 
