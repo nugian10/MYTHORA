@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mythora Owner Actions</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #0f1220; color: #f2f2f5; line-height: 1.5; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 0 0 10px; }
+  p { margin: 8px 0; }
+  .tag { color: #ffd166; font-weight: 700; letter-spacing: .08em; font-size: 13px; }
+  .card { background: #1a1e33; border: 1px solid #2c3154; border-radius: 14px; padding: 16px; margin: 16px 0; }
+  .warn { background: #3a1414; border: 1px solid #a33; border-radius: 14px; padding: 16px; margin: 16px 0; }
+  .warn b { color: #ff9b9b; }
+  .ok { background: #12331f; border: 1px solid #2e7d4f; border-radius: 14px; padding: 16px; margin: 16px 0; }
+  .big { font-size: 18px; font-weight: 700; word-break: break-all; }
+  button { width: 100%; padding: 14px 16px; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px; cursor: pointer; margin: 8px 0; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .primary { background: #ffd166; color: #1a1a1a; }
+  .secondary { background: #2c3154; color: #fff; }
+  .danger { background: #a33; color: #fff; }
+  label { display: block; font-weight: 700; margin: 10px 0 4px; }
+  input[type="number"] { width: 100%; padding: 12px; font-size: 17px; border-radius: 10px; border: 1px solid #2c3154; background: #0f1220; color: #fff; }
+  .row { display: flex; gap: 8px; }
+  .row button { flex: 1; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; word-break: break-all; }
+  .muted { color: #b9bdcf; font-size: 14px; }
+  .hidden { display: none !important; }
+  a { color: #8ecbff; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  td { padding: 6px 0; border-bottom: 1px solid #2c3154; vertical-align: top; }
+  td:first-child { color: #b9bdcf; width: 42%; }
+  #status1, #status2 { white-space: pre-wrap; }
+  .stepnum { color: #ffd166; font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <div class="tag">MYTHORA &bull; BNB SMART CHAIN</div>
+  <h1>Owner Actions</h1>
+  <p>This page lets the contract owner do the two final launch steps: set the metadata address, then open minting. Only your wallet signs, inside your own wallet app. Do the steps in order.</p>
+
+  <div class="warn">
+    <b>Important.</b> This page NEVER asks for a seed phrase or private key.
+    Never type a seed phrase or private key into any web page, and never send one to anyone, including Muse.
+    If a page asks for one, it is a scam. Close that page.
+  </div>
+
+  <div class="card">
+    <h2>Contract status</h2>
+    <p class="muted">Read from the chain. No wallet needed for this part.</p>
+    <table>
+      <tr><td>Contract</td><td class="mono">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</td></tr>
+      <tr><td>Name</td><td id="stName">&mdash;</td></tr>
+      <tr><td>Owner</td><td class="mono" id="stOwner">&mdash;</td></tr>
+      <tr><td>Expected owner</td><td class="mono">0x0262e8e5E4584D8AB840fD950a6E2E0A414d4097</td></tr>
+      <tr><td>Payout wallet</td><td class="mono" id="stPayout">&mdash;</td></tr>
+      <tr><td>Expected payout</td><td class="mono">0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7</td></tr>
+      <tr><td>Max supply</td><td id="stMax">&mdash;</td></tr>
+      <tr><td>Total minted</td><td id="stMinted">&mdash;</td></tr>
+      <tr><td>Minting</td><td id="stActive">&mdash;</td></tr>
+      <tr><td>Base URI</td><td id="stBaseUri">Cannot be read directly: this contract has no public base URI view. After Step 1, the set value is confirmed from the event in the transaction receipt below.</td></tr>
+    </table>
+    <button id="btnRefreshStatus" class="secondary" type="button">Refresh status</button>
+    <div id="statusLoad" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="stepnum">Step 1</span> &mdash; Set the base URI</h2>
+    <p>This tells the contract where the token metadata lives (IPFS). The value is fixed and cannot be typed over on this page.</p>
+    <p>Base URI to set:</p>
+    <p class="mono big" id="baseUriText">ipfs://bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/</p>
+    <button id="btnCopyUri" class="secondary" type="button">Copy base URI</button>
+    <p class="muted">The artwork and metadata for all 3,810 tokens are pinned at this address. Check the value carefully before sending.</p>
+    <button id="btnConnect" class="primary">Connect Wallet</button>
+    <div id="noWallet" class="warn hidden">
+      <b>No wallet found.</b> Open this page inside your wallet app's own browser
+      (in the Binance app, open the page from the Web3 wallet's DApp browser), or open it in a desktop browser
+      with a wallet extension installed. Then reload this page.
+    </div>
+    <div id="walletInfo" class="hidden">
+      <p>Connected address:<br><span id="addrText" class="mono"></span></p>
+      <p>Network: <span id="chainText"></span></p>
+      <div id="addrWarn" class="warn hidden">
+        <b>WRONG ADDRESS.</b> The connected address is not the owner address.
+        Only the owner can call these functions. Do not continue. Switch accounts in your wallet to the owner address, then reconnect.
+      </div>
+      <div id="addrOk" class="ok hidden">Address matches the owner address.</div>
+      <button id="btnSwitch" class="secondary hidden">Switch to BNB Smart Chain</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Gas</h2>
+    <p>Wallet BNB balance: <b id="balanceText">&mdash;</b></p>
+    <p>Step 1 estimated gas: <b id="gasText1">&mdash;</b></p>
+    <p>Step 2 estimated gas: <b id="gasText2">&mdash;</b></p>
+    <label for="gasPrice">Gas price (gwei)</label>
+    <input id="gasPrice" type="number" step="0.01" min="0.01" value="0.05" inputmode="decimal">
+    <div class="row">
+      <button id="btnPreset" class="secondary" type="button">0.05 gwei (network minimum)</button>
+      <button id="btnRefreshEst" class="secondary" type="button">Recalculate</button>
+    </div>
+    <p>Step 1 estimated cost: <b id="costText1">&mdash;</b></p>
+    <p>Step 2 estimated cost: <b id="costText2">&mdash;</b><br>
+    <span class="muted" id="costNote"></span></p>
+    <div id="costWarn" class="warn hidden"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="stepnum">Step 1</span> &mdash; Send</h2>
+    <p>This button is only active when the owner wallet is connected and the network is BNB Smart Chain.
+    Pressing it will open an approval request in your wallet. Check the address, network,
+    and cost carefully in your wallet before approving.</p>
+    <button id="btnSetBaseUri" class="primary" disabled>Set Base URI</button>
+    <div id="status1" class="muted"></div>
+    <div id="result1" class="hidden">
+      <p class="tag">BASE URI SET</p>
+      <p>Transaction hash:</p>
+      <p class="mono" id="txHash1"></p>
+      <div class="row">
+        <button id="btnScan1" class="secondary" type="button">View on BscScan</button>
+      </div>
+      <p id="verifyText1" class="muted"></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="stepnum">Step 2</span> &mdash; Open minting</h2>
+    <div class="warn">
+      <b>Warning.</b> This opens minting for everyone. Anyone will then be able to mint Mythora tokens by paying the mint price.
+      It cannot be undone from this page except by a further owner call turning minting off again.
+      Only press this button when the base URI is set (Step 1) and you are ready to launch.
+    </div>
+    <p>This button stays disabled until Step 1 is confirmed on-chain.</p>
+    <button id="btnSetMintActive" class="primary" disabled>Set Mint Active (true)</button>
+    <div id="status2" class="muted"></div>
+    <div id="result2" class="hidden">
+      <p class="tag">MINTING IS OPEN</p>
+      <p>Transaction hash:</p>
+      <p class="mono" id="txHash2"></p>
+      <div class="row">
+        <button id="btnScan2" class="secondary" type="button">View on BscScan</button>
+      </div>
+      <p id="verifyText2" class="muted"></p>
+    </div>
+    <div id="alreadyActive" class="ok hidden">Minting is already ON. Nothing to do here.</div>
+  </div>
+
+  <p class="muted">After both steps: minting is open and every token's metadata and image come from the IPFS base URI set in Step 1. Mint proceeds go to the payout wallet shown in the status above.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+"use strict";
+var CONTRACT_ADDRESS = "0x27Ba185e74b681c3e548D369C1B0792eD7D738a1";
+var OWNER_ADDRESS = "0x0262e8e5E4584D8AB840fD950a6E2E0A414d4097";
+var EXPECTED_PAYOUT = "0x89c37649Ba3BAA9E1ce028612b7DE4e9c3a947B7";
+var BASE_URI_VALUE = "ipfs://bafybeiguw4oszrazrivejadkkawx7l7iaff2g2dbgioim27fayvsxiwe6u/metadata/";
+var CHAIN_ID = 56;
+var RPC_URL = "https://bsc-dataseed.binance.org/";
+var ABI = [
+  "function owner() view returns (address)",
+  "function payoutWallet() view returns (address)",
+  "function mintActive() view returns (bool)",
+  "function totalMinted() view returns (uint256)",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function MAX_SUPPLY() view returns (uint256)",
+  "function setBaseURI(string baseURI_)",
+  "function setMintActive(bool active)",
+  "event BaseURIUpdated(string baseURI)",
+  "event MintActiveUpdated(bool active)"
+];
+var IDR_PER_USD = 16500;
+
+var readProvider = null, readContract = null;
+var provider = null, signer = null, userAddress = null, walletProvider = null;
+var gasEstimate1 = null, gasEstimate2 = null, bnbUsd = 750;
+var baseUriConfirmed = false, mintActiveOnChain = false, sending = false;
+
+function $(id) { return document.getElementById(id); }
+function getWalletProvider() {
+  if (typeof window.ethereum !== "undefined") return window.ethereum;
+  if (typeof window.binancew3w !== "undefined" && window.binancew3w.ethereum) return window.binancew3w.ethereum;
+  return null;
+}
+function idrFormat(n) {
+  return "Rp " + Math.round(n).toLocaleString("en-US");
+}
+
+async function loadBnbPrice() {
+  try {
+    var r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd");
+    var j = await r.json();
+    if (j && j.binancecoin && j.binancecoin.usd) { bnbUsd = Number(j.binancecoin.usd); }
+  } catch (e) { /* use the 750 USD fallback price */ }
+}
+
+async function loadStatus() {
+  $("statusLoad").textContent = "Reading the contract…";
+  try {
+    if (!readProvider) {
+      readProvider = new ethers.JsonRpcProvider(RPC_URL);
+      readContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, readProvider);
+    }
+    var owner = await readContract.owner();
+    var payout = await readContract.payoutWallet();
+    var active = await readContract.mintActive();
+    var minted = await readContract.totalMinted();
+    var max = await readContract.MAX_SUPPLY();
+    var name = await readContract.name();
+    var symbol = await readContract.symbol();
+    $("stName").textContent = name + " (" + symbol + ")";
+    $("stOwner").textContent = owner + (owner.toLowerCase() === OWNER_ADDRESS.toLowerCase() ? " — matches the expected owner." : " — DOES NOT MATCH the expected owner.");
+    $("stPayout").textContent = payout + (payout.toLowerCase() === EXPECTED_PAYOUT.toLowerCase() ? " — matches the expected payout wallet." : " — DOES NOT MATCH the expected payout wallet.");
+    $("stMax").textContent = max.toString();
+    $("stMinted").textContent = minted.toString();
+    $("stActive").textContent = active ? "ON" : "Off";
+    mintActiveOnChain = !!active;
+    if (mintActiveOnChain) {
+      $("alreadyActive").classList.remove("hidden");
+      $("btnSetMintActive").disabled = true;
+    }
+    $("statusLoad").textContent = "";
+  } catch (e) {
+    $("statusLoad").textContent = "Could not read the contract: " + (e && e.message ? e.message : e) + ". Check the connection and press Refresh status.";
+  }
+  refreshButtons();
+}
+
+function addressMatches() {
+  return !!userAddress && userAddress.toLowerCase() === OWNER_ADDRESS.toLowerCase();
+}
+
+async function chainIsBsc() {
+  if (!provider) return false;
+  try {
+    var net = await provider.getNetwork();
+    return Number(net.chainId) === CHAIN_ID;
+  } catch (e) { return false; }
+}
+
+function costFor(gasEstimate) {
+  var gwei = parseFloat($("gasPrice").value);
+  if (!gasEstimate || isNaN(gwei) || gwei <= 0) return null;
+  var gasPriceWei = ethers.parseUnits(gwei.toString(), "gwei");
+  var costWei = gasEstimate * gasPriceWei;
+  return { wei: costWei, bnb: Number(ethers.formatEther(costWei)) };
+}
+
+function updateCosts() {
+  var c1 = costFor(gasEstimate1), c2 = costFor(gasEstimate2);
+  $("costText1").textContent = c1 ? (c1.bnb.toFixed(6) + " BNB (around " + idrFormat(c1.bnb * bnbUsd * IDR_PER_USD) + ")") : "—";
+  $("costText2").textContent = c2 ? (c2.bnb.toFixed(6) + " BNB (around " + idrFormat(c2.bnb * bnbUsd * IDR_PER_USD) + ")") : "—";
+  $("costNote").textContent = "Rough estimates. BNB price around $" + bnbUsd + ", rate Rp " + IDR_PER_USD.toLocaleString("en-US") + " per USD. The final cost is set when each transaction is approved in the wallet.";
+  var warnEl = $("costWarn");
+  warnEl.classList.add("hidden");
+  if (userAddress && provider && (c1 || c2)) {
+    provider.getBalance(userAddress).then(function (bal) {
+      var need = c1 ? c1.wei : 0n;
+      if (c2 && c2.wei > need) need = c2.wei;
+      if (bal < need) {
+        warnEl.innerHTML = "<b>Insufficient balance.</b> The wallet BNB balance is smaller than the estimated cost. Lower the gas price or top up first.";
+        warnEl.classList.remove("hidden");
+      }
+      refreshButtons();
+    }).catch(function () {});
+  }
+  refreshButtons();
+}
+
+async function refreshButtons() {
+  var b1 = $("btnSetBaseUri"), b2 = $("btnSetMintActive");
+  if (sending || baseUriConfirmed) { b1.disabled = true; }
+  else if (!addressMatches() || !gasEstimate1) { b1.disabled = true; }
+  else {
+    var okChain = await chainIsBsc();
+    if (!okChain) { b1.disabled = true; }
+    else {
+      var c1 = costFor(gasEstimate1);
+      if (!c1) { b1.disabled = true; }
+      else {
+        try {
+          var bal = await provider.getBalance(userAddress);
+          b1.disabled = bal < c1.wei;
+        } catch (e) { b1.disabled = true; }
+      }
+    }
+  }
+  if (sending || mintActiveOnChain || !baseUriConfirmed) { b2.disabled = true; }
+  else if (!addressMatches() || !gasEstimate2) { b2.disabled = true; }
+  else {
+    var okChain2 = await chainIsBsc();
+    if (!okChain2) { b2.disabled = true; }
+    else {
+      var c2 = costFor(gasEstimate2);
+      if (!c2) { b2.disabled = true; }
+      else {
+        try {
+          var bal2 = await provider.getBalance(userAddress);
+          b2.disabled = bal2 < c2.wei;
+        } catch (e) { b2.disabled = true; }
+      }
+    }
+  }
+}
+
+async function refreshChainUi() {
+  var okChain = await chainIsBsc();
+  if (okChain) {
+    $("chainText").textContent = "BNB Smart Chain (56) — correct.";
+    $("btnSwitch").classList.add("hidden");
+  } else {
+    $("chainText").textContent = "Not BNB Smart Chain. Switch before continuing.";
+    $("btnSwitch").classList.remove("hidden");
+  }
+  return okChain;
+}
+
+async function refreshBalanceAndEstimates() {
+  var okChain = await refreshChainUi();
+  if (!okChain || !userAddress) {
+    $("balanceText").textContent = "—";
+    $("gasText1").textContent = "—";
+    $("gasText2").textContent = "—";
+    gasEstimate1 = null; gasEstimate2 = null;
+    updateCosts();
+    return;
+  }
+  try {
+    var bal = await provider.getBalance(userAddress);
+    $("balanceText").textContent = Number(ethers.formatEther(bal)).toFixed(6) + " BNB";
+  } catch (e) { $("balanceText").textContent = "Could not be read."; }
+  var writeContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  if (!baseUriConfirmed) {
+    try {
+      $("status1").textContent = "Estimating gas for Step 1…";
+      var est1 = await writeContract.setBaseURI.estimateGas(BASE_URI_VALUE);
+      gasEstimate1 = est1 * 120n / 100n; // 20% safety margin
+      $("gasText1").textContent = gasEstimate1.toString() + " gas units (includes a 20% margin)";
+      $("status1").textContent = "";
+    } catch (e) {
+      gasEstimate1 = null;
+      $("gasText1").textContent = "Could not be estimated: " + (e && e.message ? e.message : e);
+      $("status1").textContent = "Gas estimation for Step 1 failed. Press Recalculate.";
+    }
+  }
+  if (baseUriConfirmed && !mintActiveOnChain) {
+    try {
+      $("status2").textContent = "Estimating gas for Step 2…";
+      var est2 = await writeContract.setMintActive.estimateGas(true);
+      gasEstimate2 = est2 * 120n / 100n; // 20% safety margin
+      $("gasText2").textContent = gasEstimate2.toString() + " gas units (includes a 20% margin)";
+      $("status2").textContent = "";
+    } catch (e) {
+      gasEstimate2 = null;
+      $("gasText2").textContent = "Could not be estimated: " + (e && e.message ? e.message : e);
+      $("status2").textContent = "Gas estimation for Step 2 failed. Press Recalculate.";
+    }
+  }
+  updateCosts();
+}
+
+async function connectWallet() {
+  walletProvider = getWalletProvider();
+  if (!walletProvider) {
+    $("noWallet").classList.remove("hidden");
+    $("btnConnect").disabled = true;
+    return;
+  }
+  try {
+    $("status1").textContent = "Waiting for approval in your wallet…";
+    await walletProvider.request({ method: "eth_requestAccounts" });
+    provider = new ethers.BrowserProvider(walletProvider);
+    signer = await provider.getSigner();
+    userAddress = await signer.getAddress();
+    $("walletInfo").classList.remove("hidden");
+    $("addrText").textContent = userAddress;
+    if (addressMatches()) {
+      $("addrOk").classList.remove("hidden");
+      $("addrWarn").classList.add("hidden");
+    } else {
+      $("addrWarn").classList.remove("hidden");
+      $("addrOk").classList.add("hidden");
+    }
+    $("status1").textContent = "";
+    await refreshBalanceAndEstimates();
+  } catch (e) {
+    if (e && e.code === 4001) {
+      $("status1").textContent = "Cancelled in the wallet. Nothing was connected and no transaction was sent.";
+    } else {
+      $("status1").textContent = "Failed to connect the wallet: " + (e && e.message ? e.message : e);
+    }
+  }
+}
+
+async function switchChain() {
+  try {
+    await walletProvider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0x38" }]
+    });
+  } catch (e) {
+    if (e && e.code === 4902) {
+      try {
+        await walletProvider.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: "0x38",
+            chainName: "BNB Smart Chain",
+            nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+            rpcUrls: ["https://bsc-dataseed.binance.org/"],
+            blockExplorerUrls: ["https://bscscan.com"]
+          }]
+        });
+      } catch (e2) {
+        $("status1").textContent = "Failed to add the BNB Smart Chain network: " + (e2 && e2.message ? e2.message : e2);
+        return;
+      }
+    } else if (e && e.code === 4001) {
+      $("status1").textContent = "Cancelled in the wallet. The network was not changed.";
+      return;
+    } else {
+      $("status1").textContent = "Failed to switch networks: " + (e && e.message ? e.message : e);
+      return;
+    }
+  }
+  await refreshBalanceAndEstimates();
+}
+
+async function sendStep1() {
+  if (sending) return;
+  if (!addressMatches()) { $("status1").textContent = "Address does not match the owner address. Cancelled."; return; }
+  if (!(await chainIsBsc())) { $("status1").textContent = "Network is not BNB Smart Chain. Switch first."; return; }
+  var gwei = parseFloat($("gasPrice").value);
+  if (isNaN(gwei) || gwei <= 0 || !gasEstimate1) { $("status1").textContent = "Enter a valid gas price and wait for the gas estimate."; return; }
+  sending = true;
+  refreshButtons();
+  try {
+    var gasPriceWei = ethers.parseUnits(gwei.toString(), "gwei");
+    var writeContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    $("status1").textContent = "Sending Step 1. Check and approve it in your wallet…";
+    var tx = await writeContract.setBaseURI(BASE_URI_VALUE, { gasLimit: gasEstimate1, gasPrice: gasPriceWei });
+    $("status1").textContent = "Transaction sent. Hash: " + tx.hash + "\nWaiting for network confirmation…\nView on BscScan: https://bscscan.com/tx/" + tx.hash;
+    var receipt = await tx.wait();
+    var iface = new ethers.Interface(ABI);
+    var confirmedValue = null;
+    for (var i = 0; i < receipt.logs.length; i++) {
+      try {
+        var parsed = iface.parseLog(receipt.logs[i]);
+        if (parsed && parsed.name === "BaseURIUpdated") { confirmedValue = parsed.args[0]; }
+      } catch (e) { /* log from another contract; ignore */ }
+    }
+    $("txHash1").textContent = tx.hash;
+    $("btnScan1").onclick = function () { window.open("https://bscscan.com/tx/" + tx.hash, "_blank"); };
+    $("result1").classList.remove("hidden");
+    if (confirmedValue === BASE_URI_VALUE) {
+      baseUriConfirmed = true;
+      $("verifyText1").textContent = "Confirmed on-chain: the BaseURIUpdated event in block " + receipt.blockNumber + " carries exactly the base URI above. Step 2 is now unlocked.";
+      $("status1").textContent = "Step 1 done. Continue to Step 2 below.";
+    } else {
+      $("verifyText1").textContent = "The transaction confirmed in block " + receipt.blockNumber + ", but no BaseURIUpdated event with the expected value was found in the receipt. Do not continue to Step 2 until the value is confirmed on BscScan.";
+      $("status1").textContent = "Step 1 could not be confirmed from the receipt. Check the transaction on BscScan.";
+    }
+    await loadStatus();
+    await refreshBalanceAndEstimates();
+  } catch (e) {
+    if (e && e.code === 4001) {
+      $("status1").textContent = "Cancelled in the wallet. No transaction was sent and there was no cost.";
+    } else {
+      $("status1").textContent = "Step 1 failed: " + (e && e.message ? e.message : e);
+    }
+  } finally {
+    sending = false;
+    refreshButtons();
+  }
+}
+
+async function sendStep2() {
+  if (sending) return;
+  if (!baseUriConfirmed) { $("status2").textContent = "Step 1 must be confirmed first."; return; }
+  if (!addressMatches()) { $("status2").textContent = "Address does not match the owner address. Cancelled."; return; }
+  if (!(await chainIsBsc())) { $("status2").textContent = "Network is not BNB Smart Chain. Switch first."; return; }
+  var gwei = parseFloat($("gasPrice").value);
+  if (isNaN(gwei) || gwei <= 0 || !gasEstimate2) { $("status2").textContent = "Enter a valid gas price and wait for the gas estimate."; return; }
+  sending = true;
+  refreshButtons();
+  try {
+    var gasPriceWei = ethers.parseUnits(gwei.toString(), "gwei");
+    var writeContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    $("status2").textContent = "Sending Step 2. Check and approve it in your wallet…";
+    var tx = await writeContract.setMintActive(true, { gasLimit: gasEstimate2, gasPrice: gasPriceWei });
+    $("status2").textContent = "Transaction sent. Hash: " + tx.hash + "\nWaiting for network confirmation…\nView on BscScan: https://bscscan.com/tx/" + tx.hash;
+    var receipt = await tx.wait();
+    $("txHash2").textContent = tx.hash;
+    $("btnScan2").onclick = function () { window.open("https://bscscan.com/tx/" + tx.hash, "_blank"); };
+    $("result2").classList.remove("hidden");
+    try {
+      var activeNow = await readContract.mintActive();
+      mintActiveOnChain = !!activeNow;
+      $("verifyText2").textContent = "Read back from the chain: mintActive = " + (activeNow ? "true (ON)" : "false (OFF — the call may not have taken effect; check BscScan)") + ". Confirmed in block " + receipt.blockNumber + ".";
+      $("status2").textContent = activeNow ? "Minting is now open." : "The transaction confirmed, but minting still reads OFF. Check the transaction on BscScan.";
+    } catch (e) {
+      $("verifyText2").textContent = "The transaction confirmed in block " + receipt.blockNumber + ", but the read-back check failed: " + (e && e.message ? e.message : e) + ". Check the transaction on BscScan.";
+    }
+    await loadStatus();
+  } catch (e) {
+    if (e && e.code === 4001) {
+      $("status2").textContent = "Cancelled in the wallet. No transaction was sent and there was no cost.";
+    } else {
+      $("status2").textContent = "Step 2 failed: " + (e && e.message ? e.message : e);
+    }
+  } finally {
+    sending = false;
+    refreshButtons();
+  }
+}
+
+$("btnConnect").addEventListener("click", connectWallet);
+$("btnSwitch").addEventListener("click", switchChain);
+$("btnSetBaseUri").addEventListener("click", sendStep1);
+$("btnSetMintActive").addEventListener("click", sendStep2);
+$("btnPreset").addEventListener("click", function () { $("gasPrice").value = "0.05"; updateCosts(); });
+$("btnRefreshEst").addEventListener("click", refreshBalanceAndEstimates);
+$("gasPrice").addEventListener("input", updateCosts);
+$("btnRefreshStatus").addEventListener("click", loadStatus);
+$("btnCopyUri").addEventListener("click", function () {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(BASE_URI_VALUE).then(function () { $("btnCopyUri").textContent = "Copied!"; });
+  }
+});
+walletProvider = getWalletProvider();
+if (walletProvider) {
+  if (walletProvider.on) {
+    walletProvider.on("accountsChanged", function () { window.location.reload(); });
+    walletProvider.on("chainChanged", function () { window.location.reload(); });
+  }
+} else {
+  $("noWallet").classList.remove("hidden");
+  $("btnConnect").disabled = true;
+}
+loadBnbPrice().then(updateCosts);
+loadStatus();
+</script>
+</body>
+</html>
