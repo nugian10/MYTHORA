@@ -1,7 +1,9 @@
-/* Mythora reconstruction — client-side hash routing, real on-chain minting.
- * The Mint box connects the visitor's own wallet and sends real mint()
- * transactions to the deployed Mythora contract on BNB Smart Chain.
- * Counters and prices are read live from the contract via public RPC.
+/* Mythora — client-side hash routing, read-only chain data.
+ * This page never connects to a wallet. Minting happens through the
+ * visitor's Binance Agentic Wallet agent: the page shows a copy-paste
+ * prompt and CLI commands, and reads live chain data via public RPC.
+ * The contract's mint() is permissionless; the agent path is how this
+ * page presents minting, not an on-chain restriction.
  * No seed phrase or private key is ever asked for or handled here. */
 (function () {
   "use strict";
@@ -24,28 +26,18 @@
     "function mintActive() view returns (bool)",
     "function mintPrice(uint256 quantity) view returns (uint256)",
     "function MAX_SUPPLY() view returns (uint256)",
-    "function mint(uint256 quantity) payable",
-    "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
+    "function balanceOf(address owner) view returns (uint256)"
   ];
-  var MAX_QTY = 20; // UI-only cap per transaction; the contract has no cap.
-  var ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+  /* mint(uint256) selector, computed with ethers id("mint(uint256)") and
+   * verified against the deployed contract ABI. */
+  var MINT_SELECTOR = "0xa0712d68";
 
   var state = {
-    wallet: null, // { address, truncated }
-    wrongChain: false,
-    noProvider: false,
     sessionMintedIds: [],
-    lastMintedIds: [],
-    lastTxHash: null,
-    mintPending: false,
-    mintMessage: null, // { kind: "info"|"ok"|"error", text, txHash }
-    priceWei: null, // decimal string for the current quantity, null = unknown
-    priceLoading: false,
-    priceError: false,
     votes: { "celestial-kitsune": 0, "raijin-dragon": 0, "moonlit-yuki-onna": 0 },
     currentVote: null,
-    mintQty: 1,
-    gallery: { rarity: "all", status: "all", search: "", visible: 24 }
+    gallery: { rarity: "all", status: "all", search: "", visible: 24 },
+    checkWallet: null // { address, balance, bnb, error } from the last lookup
   };
 
   /* Live chain state, read via public RPC. No wallet needed for reading. */
@@ -59,6 +51,9 @@
     cap: 3810,
     active: null
   };
+
+  /* Current mintPrice(1), read live; null = not loaded yet. */
+  var priceState = { loading: false, loaded: false, error: false, wei: null };
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -103,6 +98,7 @@
   /* ---------------- Live chain reads (public RPC, no wallet) ---------------- */
 
   var readContract = null;
+  var readProvider = null;
   var readContractPromise = null;
 
   function withTimeout(promise, ms) {
@@ -118,12 +114,13 @@
     if (readContract) return Promise.resolve(readContract);
     if (readContractPromise) return readContractPromise;
     if (typeof ethers === "undefined") {
-      return Promise.reject(new Error("Wallet library did not load."));
+      return Promise.reject(new Error("Chain-reading library did not load."));
     }
     readContractPromise = (function tryNext(i) {
       if (i >= RPC_URLS.length) throw new Error("No public RPC answered.");
       var provider = new ethers.JsonRpcProvider(RPC_URLS[i]);
       return withTimeout(provider.getBlockNumber(), 10000).then(function () {
+        readProvider = provider;
         readContract = new ethers.Contract(CONTRACT_ADDRESS, MINT_ABI, provider);
         return readContract;
       }).catch(function () { return tryNext(i + 1); });
@@ -157,6 +154,34 @@
     });
   }
 
+  function loadMintPrice(force) {
+    if (priceState.loading) return Promise.resolve();
+    if (priceState.loaded && !force) return Promise.resolve();
+    priceState.loading = true;
+    return getReadContract().then(function (c) {
+      return c.mintPrice(1);
+    }).then(function (price) {
+      priceState.wei = price.toString();
+      priceState.loaded = true;
+      priceState.error = false;
+    }).catch(function () {
+      priceState.error = true;
+      priceState.loaded = false;
+    }).then(function () {
+      priceState.loading = false;
+      syncPriceUi();
+    });
+  }
+
+  function syncPriceUi() {
+    var text = priceState.error ? "—" : (priceState.wei == null ? "…" : fmtWei(priceState.wei) + " BNB");
+    $all('[data-live="price1"]').forEach(function (el) { el.textContent = text; });
+    var retry = $("#price-retry");
+    if (retry) retry.style.display = priceState.error ? "" : "none";
+    var note = $("#price-note");
+    if (note) note.style.display = priceState.error ? "" : "none";
+  }
+
   /* Update every chain-dependent number already on the page, in place,
    * so a late RPC answer never jumps the user's scroll position. */
   function syncChainUi() {
@@ -170,115 +195,13 @@
     });
     var retry = $("#chain-retry");
     if (retry) retry.style.display = chainState.error ? "" : "none";
-    var totalsNote = $("#mint-totals-note");
-    if (totalsNote) totalsNote.style.display = chainState.error ? "" : "none";
-    updateMintButton();
+    var note = $("#chain-note");
+    if (note) note.style.display = chainState.error ? "" : "none";
   }
 
-  /* ---------------- Wallet (visitor's own wallet, injected provider) ---------------- */
-
-  function getWalletProvider() {
-    if (typeof window.ethereum !== "undefined") return window.ethereum;
-    if (typeof window.binancew3w !== "undefined" && window.binancew3w.ethereum) return window.binancew3w.ethereum;
-    return null;
-  }
-
-  function attachWalletListeners(wp) {
-    if (!wp || !wp.on || wp.__mythoraListeners) return;
-    wp.__mythoraListeners = true;
-    wp.on("accountsChanged", function (accounts) {
-      if (!accounts || !accounts.length) {
-        disconnectWallet();
-      } else {
-        state.wallet = { address: accounts[0], truncated: truncated(accounts[0]) };
-        render();
-        refreshPrice();
-      }
-    });
-    wp.on("chainChanged", function () {
-      refreshWalletChain().then(function () { render(); refreshPrice(); });
-    });
-  }
-
-  function refreshWalletChain() {
-    var wp = getWalletProvider();
-    if (!wp || !state.wallet) { state.wrongChain = false; return Promise.resolve(); }
-    return wp.request({ method: "eth_chainId" }).then(function (chainIdHex) {
-      state.wrongChain = parseInt(chainIdHex, 16) !== CHAIN_ID;
-    }).catch(function () { state.wrongChain = false; });
-  }
-
-  function switchToBsc() {
-    var wp = getWalletProvider();
-    if (!wp) return Promise.resolve();
-    return wp.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0x38" }]
-    }).catch(function (e) {
-      if (e && e.code === 4902) {
-        return wp.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: "0x38",
-            chainName: "BNB Smart Chain",
-            nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-            rpcUrls: ["https://bsc-dataseed.binance.org/"],
-            blockExplorerUrls: ["https://bscscan.com"]
-          }]
-        });
-      }
-      throw e;
-    }).then(function () {
-      state.wrongChain = false;
-      render();
-      refreshPrice();
-    }).catch(function (e) {
-      if (e && e.code === 4001) {
-        announce("Network switch cancelled in the wallet.");
-      } else {
-        announce("Could not switch networks. Switch to BNB Smart Chain in your wallet and try again.");
-      }
-    });
-  }
-
-  function connectWallet() {
-    var wp = getWalletProvider();
-    if (!wp) {
-      state.noProvider = true;
-      render();
-      announce("No wallet detected in this browser. Open this site in your wallet app's browser to mint.");
-      return;
-    }
-    state.noProvider = false;
-    announce("Waiting for approval in your wallet…");
-    wp.request({ method: "eth_requestAccounts" }).then(function (accounts) {
-      if (!accounts || !accounts.length) throw new Error("No account returned.");
-      state.wallet = { address: accounts[0], truncated: truncated(accounts[0]) };
-      attachWalletListeners(wp);
-      return refreshWalletChain();
-    }).then(function () {
-      render();
-      refreshPrice();
-      announce("Wallet connected: " + state.wallet.truncated);
-    }).catch(function (e) {
-      if (e && e.code === 4001) {
-        announce("Connection cancelled in the wallet. Nothing was connected.");
-      } else {
-        announce("Could not connect the wallet. Open this site in your wallet app's browser and try again.");
-      }
-      render();
-    });
-  }
-
-  function disconnectWallet() {
-    state.wallet = null;
-    state.wrongChain = false;
-    state.lastMintedIds = [];
-    state.lastTxHash = null;
-    state.mintMessage = null;
-    render();
-    announce("Wallet disconnected.");
-  }
+  /* No wallet connection: this page never connects to a wallet and never
+   * asks for a seed phrase or private key. Minting happens through the
+   * visitor's own Binance Agentic Wallet agent (see mintView). */
 
   /* ---------------- Counters ---------------- */
 
@@ -349,20 +272,6 @@
     });
   }
 
-  function renderHeaderWallet() {
-    var box = $("#wallet-box");
-    if (!box) return;
-    if (state.wallet) {
-      box.innerHTML =
-        '<span aria-label="Connected wallet address, truncated">' + esc(state.wallet.truncated) + "</span>" +
-        '<button type="button" class="btn-ghost" id="disconnect-btn">Disconnect</button>';
-      $("#disconnect-btn").addEventListener("click", disconnectWallet);
-    } else {
-      box.innerHTML = '<button type="button" class="btn-primary" id="connect-btn">Connect Wallet</button>';
-      $("#connect-btn").addEventListener("click", connectWallet);
-    }
-  }
-
   /* ---------------- Home ---------------- */
   function homeView() {
     var legends = DATA.tokens.filter(function (t) { return t.rarity === "Legendary"; });
@@ -374,7 +283,7 @@
       return "<tr><td>" + esc(r.name) + "</td><td>" + r.share + "</td><td>" + r.count + "</td><td>" + esc(r.weight) + "</td></tr>";
     }).join("");
     return '<div class="banner" role="note"><strong>CONTRACT DEPLOYED &bull; VERIFIED ON-CHAIN</strong>' +
-      "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting is open on-chain. Connect your wallet to mint &mdash; every mint is a real on-chain transaction.</p></div>" +
+      "<p>The Mythora contract is deployed on BNB Smart Chain: <a href=\"https://bscscan.com/address/0x27Ba185e74b681c3e548D369C1B0792eD7D738a1\" target=\"_blank\" rel=\"noopener noreferrer\">0x27Ba185e74b681c3e548D369C1B0792eD7D738a1</a>. Minting is open on-chain. Your agent mints for you &mdash; this page only reads the chain.</p></div>" +
       '<section class="cover" aria-label="Mythora cover">' +
       '<div class="cover-stars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
       '<p class="eyebrow">PERMANENT 3,810 CAP &bull; BNB SMART CHAIN</p>' +
@@ -394,10 +303,10 @@
       '<div class="legend-grid">' + legends.map(tokenCard).join("") + "</div>" +
       '<p><a href="#/gallery?rarity=legendary">Meet all twelve &rarr;</a></p></section>' +
       '<section aria-labelledby="rarity-h"><h2 id="rarity-h">Rarity, published in full</h2>' +
-      "<p>The allocation was committed at genesis and can never change &mdash; every tier and every count, published. In this reconstruction, the gallery allocation outside the 12 Legends is generated deterministically and is not the original genesis table; see the gallery notice.</p>" +
+      "<p>The allocation was committed at genesis and can never change &mdash; every tier and every count, published. The gallery allocation outside the 12 Legends is generated deterministically and is not the original genesis table; see the gallery notice.</p>" +
       '<div class="card"><table><thead><tr><th>Tier</th><th>Share</th><th>Count</th><th>Voting weight</th></tr></thead><tbody>' + rows + "</tbody></table></div></section>" +
       '<section aria-labelledby="utility-h"><h2 id="utility-h">Real utility, from day one</h2><div class="grid-3">' +
-      '<div class="card"><h3>Holder community</h3><p>Planned: owning a Mythora is described as unlocking the holder community. No gated channels or holder-only links are provided in this reconstruction.</p></div>' +
+      '<div class="card"><h3>Holder community</h3><p>Planned: owning a Mythora is described as unlocking the holder community. No gated channels or holder-only links are provided on this site.</p></div>' +
       '<div class="card"><h3>Vote the next design</h3><p>Holders decide which chibi the forges craft next. One weighted vote per wallet, switchable any time.</p><p><a href="#/governance">Open voting</a></p></div>' +
       '<div class="card"><h3>Mythora on X</h3><p>Daily lore, drop alerts and holder-only events on the official profile.</p><p><a href="' + DATA.xUrl + '" target="_blank" rel="noopener noreferrer">Follow @MythoraNFT on X</a></p></div>' +
       "</div></section>" +
@@ -406,140 +315,115 @@
       '<p><a class="button btn-primary" href="#/mint">Mint yours</a></p></section>';
   }
 
-  /* ---------------- Mint (real, on-chain) ---------------- */
+  /* ---------------- Mint (agent pattern, read-only page) ---------------- */
 
-  /* No reveal step: the minter gets the actual card right away, directly
-   * on this page. No question-mark card, no waiting, no dialog. The
-   * token ids come from the Transfer events in the mint receipt. */
-  function mintedCardsHtml() {
-    if (!state.lastMintedIds.length) return "";
-    var cards = state.lastMintedIds.map(function (id) { return tokenCard(tokensById[id]); }).join("");
-    var txLine = state.lastTxHash
-      ? '<p>Transaction: <a href="https://bscscan.com/tx/' + esc(state.lastTxHash) + '" target="_blank" rel="noopener noreferrer">' + esc(state.lastTxHash) + "</a></p>"
-      : "";
-    return '<section class="card" id="your-cards" aria-labelledby="your-cards-h"><h3 id="your-cards-h">Your card' + (state.lastMintedIds.length > 1 ? "s" : "") + "</h3>" +
-      "<p>You got your card right away &mdash; no question-mark card, no waiting. These are real tokens, minted on-chain to your wallet.</p>" +
-      txLine +
-      '<div class="grid-3">' + cards + "</div></section>";
-  }
+  /* This page never connects to a wallet. It reads live chain data and
+   * shows a copy-paste prompt plus baw CLI commands for the visitor's
+   * Binance Agentic Wallet agent, which sends the mint() call itself.
+   * The contract's mint() is permissionless: it does not check for an
+   * Agent ID and has no per-wallet limit. The agent path below is how
+   * this page presents minting; it is not an on-chain restriction. */
 
-  function mintMessageHtml() {
-    if (!state.mintMessage) return "";
-    var m = state.mintMessage;
-    var cls = m.kind === "error" ? "mint-status mint-status-error" : (m.kind === "ok" ? "mint-status mint-status-ok" : "mint-status");
-    var tx = m.txHash
-      ? ' <a href="https://bscscan.com/tx/' + esc(m.txHash) + '" target="_blank" rel="noopener noreferrer">View on BscScan</a>'
-      : "";
-    return '<p class="' + cls + '" id="mint-status" role="status">' + esc(m.text) + tx + "</p>";
-  }
+  var AGENT_PROMPT =
+    "Mint a Mythora token for my wallet using my Binance Agentic Wallet. " +
+    "Contract: 0x27Ba185e74b681c3e548D369C1B0792eD7D738a1 on BNB Smart Chain (56). " +
+    "First read mintPrice(1) from the contract and send exactly that value with mint(1) " +
+    "(selector 0xa0712d68). Preview with baw, then execute. " +
+    "Full skill: https://puzzlehave.fun/mythora-skill.md";
 
-  function mintButtonState() {
-    if (state.mintPending) return { disabled: true, label: "Waiting for confirmation…" };
-    if (chainState.remaining === 0) return { disabled: true, label: "Sold out" };
-    if (chainState.loaded && chainState.active === false) return { disabled: true, label: "Minting is off" };
-    if (state.wrongChain) return { disabled: true, label: "Switch to BNB Smart Chain" };
-    if (!state.wallet) return { disabled: true, label: "Mint" };
-    if (state.priceLoading || state.priceError || state.priceWei == null) return { disabled: true, label: "Mint" };
-    if (chainState.remaining != null && state.mintQty > chainState.remaining) return { disabled: true, label: "Mint" };
-    if (!chainState.loaded && !chainState.error) return { disabled: true, label: "Mint" };
-    if (chainState.error) return { disabled: true, label: "Mint" };
-    return { disabled: false, label: "Mint" };
-  }
+  var BAW_CLI =
+    "baw wallet sign-in\n\n" +
+    "baw contract-call preview --binanceChainId 56 --from <your-wallet> " +
+    "--to 0x27Ba185e74b681c3e548D369C1B0792eD7D738a1 --value <mintPrice-wei> " +
+    "--inputData 0xa0712d680000000000000000000000000000000000000000000000000000000000000001\n\n" +
+    "baw contract-call execute --requestId <from-preview>";
 
-  function updateMintButton() {
-    var btn = $("#mint-btn");
-    if (!btn) return;
-    var s = mintButtonState();
-    btn.disabled = s.disabled;
-    btn.textContent = s.label;
-    var minus = $("#qty-minus"), plus = $("#qty-plus");
-    var maxQty = MAX_QTY;
-    if (chainState.remaining != null) maxQty = Math.min(MAX_QTY, Math.max(1, chainState.remaining));
-    if (minus) minus.disabled = state.mintQty <= 1;
-    if (plus) plus.disabled = state.mintQty >= maxQty;
-  }
-
-  function updatePriceLine() {
-    var el = $("#price-line");
-    if (!el) return;
-    if (state.priceLoading) {
-      el.textContent = "Total: calculating…";
-    } else if (state.priceError) {
-      el.textContent = "Total: price unavailable. Check your connection and try again.";
-    } else if (state.priceWei != null) {
-      el.innerHTML = "Total: <strong>" + esc(fmtWei(state.priceWei)) + " BNB</strong> for " + state.mintQty + " token" + (state.mintQty === 1 ? "" : "s") + " (plus network gas, paid separately).";
+  function copyText(text, btn) {
+    function done(ok) {
+      if (!btn) return;
+      btn.textContent = ok ? "Copied" : "Copy failed — select the text manually";
+      setTimeout(function () { btn.textContent = "Copy"; }, 2000);
+      announce(ok ? "Copied to clipboard." : "Copy failed.");
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else if (typeof document !== "undefined") {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      done(ok);
     } else {
-      el.textContent = "Total: …";
+      done(false);
     }
   }
 
-  var priceSeq = 0;
-  function refreshPrice() {
-    var qty = state.mintQty;
-    var seq = ++priceSeq;
-    state.priceLoading = true;
-    state.priceError = false;
-    updatePriceLine();
-    updateMintButton();
-    getReadContract().then(function (c) {
-      return c.mintPrice(qty);
-    }).then(function (price) {
-      if (seq !== priceSeq) return;
-      state.priceWei = price.toString();
-      state.priceLoading = false;
-      updatePriceLine();
-      updateMintButton();
-    }).catch(function () {
-      if (seq !== priceSeq) return;
-      state.priceWei = null;
-      state.priceLoading = false;
-      state.priceError = true;
-      updatePriceLine();
-      updateMintButton();
-    });
+  function mintStatsHtml() {
+    var c = counters();
+    return '<div class="counters" aria-label="Live chain stats">' +
+      '<div class="counter"><strong data-counter="minted">' + displayNum(c.minted, c.error) + '</strong><span>MINTED</span></div>' +
+      '<div class="counter"><strong data-counter="remaining">' + displayNum(c.remaining, c.error) + '</strong><span>REMAINING</span></div>' +
+      '<div class="counter"><strong>' + c.cap + '</strong><span>SUPPLY</span></div>' +
+      '<div class="counter"><strong data-live="price1">' + (priceState.error ? "—" : (priceState.wei == null ? "…" : fmtWei(priceState.wei) + " BNB")) + '</strong><span>PRICE FOR 1 TOKEN</span></div>' +
+      "</div>" +
+      '<p class="mint-totals"><strong>Total Item:</strong> ' + c.cap + ' &nbsp;&middot;&nbsp; <strong>Sudah Mint:</strong> <span data-counter="minted">' + displayNum(c.minted, c.error) + '</span> &nbsp;&middot;&nbsp; <strong>Sisa:</strong> <span data-counter="remaining">' + displayNum(c.remaining, c.error) + "</span></p>" +
+      '<p class="notice" id="chain-note" style="display:' + (c.error ? "" : "none") + '">The on-chain numbers could not be read. Check your connection. <button type="button" class="btn-ghost" id="chain-retry">Retry</button></p>' +
+      '<p class="notice" id="price-note" style="display:' + (priceState.error ? "" : "none") + '">The current price could not be read. <button type="button" class="btn-ghost" id="price-retry">Retry price</button></p>' +
+      '<p>Minting: <span data-live="mintActive">' + (c.error ? "—" : (c.active == null ? "…" : (c.active ? "On (mintActive is true)" : "Off (mintActive is false)"))) + '</span> &middot; Price rule: the first 1,905 mints cost 0.00005 BNB each, then 0.0005 BNB each. The price above is read live from the contract.</p>';
   }
 
-  function setMintMessage(kind, text, txHash) {
-    state.mintMessage = { kind: kind, text: text, txHash: txHash || null };
-    var slot = $("#mint-status-slot");
-    if (slot) slot.innerHTML = mintMessageHtml();
-    announce(text);
+  function mintStepsHtml() {
+    return '<div class="card"><h3>How minting works here</h3><ol class="steps">' +
+      "<li><strong>01 &middot; Fund your Agentic Wallet.</strong> Minting is done by your Binance Agentic Wallet agent, from your own wallet funded with BNB for the price plus network gas. No Agent ID is needed: the contract does not check for one.</li>" +
+      "<li><strong>02 &middot; Prompt your agent.</strong> Send the prompt below to your agent. It reads the exact price from the contract first, previews the call, and only then executes. To mint more than one token, tell your agent the quantity &mdash; it must read mintPrice for that quantity and send exactly that value.</li>" +
+      "<li><strong>03 &middot; The token is yours.</strong> One mint() call per instruction, straight from your wallet. The token id is drawn at random on-chain from the remaining supply, and the token goes directly to your wallet.</li>" +
+      "</ol></div>";
+  }
+
+  function promptBlockHtml() {
+    return '<div class="card"><div class="prompt-head"><h3>PROMPT FOR YOUR AGENT</h3>' +
+      '<button type="button" class="btn-ghost" id="copy-prompt-btn">Copy</button></div>' +
+      '<pre class="code-block" id="agent-prompt">' + esc(AGENT_PROMPT) + "</pre>" +
+      '<p>Full agent instructions: <a href="https://puzzlehave.fun/mythora-skill.md">mythora-skill.md</a></p></div>';
+  }
+
+  function cliBlockHtml() {
+    return '<div class="card"><div class="prompt-head"><h3>OR VIA THE BAW CLI</h3>' +
+      '<button type="button" class="btn-ghost" id="copy-cli-btn">Copy</button></div>' +
+      '<pre class="code-block" id="baw-cli">' + esc(BAW_CLI) + "</pre>" +
+      "<p>Quantity 1 example. The inputData is the mint(uint256) selector followed by the 32-byte big-endian quantity. For a different quantity, re-read mintPrice for that quantity and encode it the same way.</p></div>";
+  }
+
+  function checkWalletHtml() {
+    var result = "";
+    var cw = state.checkWallet;
+    if (cw) {
+      if (cw.error) {
+        result = '<p class="mint-status mint-status-error" role="status">' + esc(cw.error) + "</p>";
+      } else {
+        result = '<p role="status">Wallet <a href="https://bscscan.com/address/' + esc(cw.address) + '" target="_blank" rel="noopener noreferrer">' + esc(cw.address) + "</a> holds <strong>" + cw.balance + "</strong> Mythora token(s) and <strong>" + esc(cw.bnb) + " BNB</strong>.</p>";
+      }
+    }
+    return '<div class="card"><h3>CHECK A WALLET</h3>' +
+      "<p>Enter any BNB Chain wallet address to see how many Mythora tokens it holds.</p>" +
+      '<div class="check-row"><input id="check-address" type="text" inputmode="latin" placeholder="0x…" autocomplete="off" spellcheck="false" aria-label="Wallet address to check" value="' + esc(cw ? cw.address : "") + '">' +
+      '<button type="button" class="btn-primary" id="check-wallet-btn">Check</button></div>' +
+      '<div id="check-wallet-result">' + result + "</div></div>";
   }
 
   function mintView() {
-    var c = counters();
-    if (state.mintQty > MAX_QTY) state.mintQty = MAX_QTY;
-    if (c.remaining != null && state.mintQty > Math.max(1, c.remaining)) state.mintQty = Math.max(1, Math.min(MAX_QTY, c.remaining));
-    var totalsLine = '<p class="mint-totals" aria-label="Total item, sudah mint, dan sisa"><strong>Total Item:</strong> ' + c.cap + ' &nbsp;&middot;&nbsp; <strong>Sudah Mint:</strong> <span data-counter="minted">' + displayNum(c.minted, c.error) + '</span> &nbsp;&middot;&nbsp; <strong>Sisa:</strong> <span data-counter="remaining">' + displayNum(c.remaining, c.error) + "</span></p>" +
-      '<p class="notice" id="mint-totals-note" style="display:' + (c.error ? "" : "none") + '">The on-chain count could not be read. Check your connection. <button type="button" class="btn-ghost" id="chain-retry">Retry</button></p>';
-    var walletBlock;
-    if (state.wallet) {
-      walletBlock = '<p>Connected wallet: <span class="mint-address">' + esc(state.wallet.address) + "</span></p>" +
-        (state.wrongChain
-          ? '<p class="mint-status mint-status-error">Your wallet is not on BNB Smart Chain.</p><p><button type="button" class="btn-primary" id="switch-chain-btn">Switch to BNB Smart Chain</button></p>'
-          : "");
-    } else {
-      walletBlock = '<p>Connect your wallet to mint. Your wallet signs the transaction; this page never asks for a seed phrase or private key.</p>' +
-        '<p><button type="button" class="btn-primary" id="mint-connect-btn">Connect Wallet</button></p>';
-    }
     var oddsRows = DATA.rarity.map(function (r) {
       return "<tr><td>" + esc(r.name) + "</td><td>" + r.count + "</td><td>" + r.share + "</td></tr>";
     }).join("");
-    var s = mintButtonState();
-    var mintPanel = '<div id="panel-mint">' +
-      "<h3>Mint</h3>" +
-      '<div class="qty-row"><label for="mint-qty-label">Quantity</label>' +
-      '<button type="button" id="qty-minus" aria-label="Decrease quantity">&minus;</button>' +
-      '<output id="mint-qty-label" aria-live="polite">' + state.mintQty + "</output>" +
-      '<button type="button" id="qty-plus" aria-label="Increase quantity">+</button>' +
-      '<span class="token-meta">Max ' + MAX_QTY + " per transaction</span>" +
-      "</div>" +
-      '<p class="price-line" id="price-line">Total: …</p>' +
-      '<button type="button" class="btn-primary" id="mint-btn" ' + (s.disabled ? "disabled" : "") + ">" + esc(s.label) + "</button>" +
-      "</div>";
     return '<section aria-labelledby="mint-h"><h2 id="mint-h">Mint Portal</h2>' +
-      walletBlock + totalsLine + '<div id="mint-status-slot">' + mintMessageHtml() + "</div>" + mintedCardsHtml() +
-      '<div class="card" id="mint-box">' + mintPanel + "</div>" +
+      "<p>Your agent mints it &mdash; this page only reads the chain.</p>" +
+      mintStatsHtml() + mintStepsHtml() + promptBlockHtml() + cliBlockHtml() + checkWalletHtml() +
+      '<p class="notice">How this page relates to the contract: the contract&apos;s mint() is permissionless &mdash; it does not check for an Agent ID and has no per-wallet limit. Minting through your agent is how this page presents minting; it is not an on-chain restriction. Anyone can still call mint() on the contract directly.</p>' +
       '<div class="card odds"><h3>Your odds on every mint</h3>' +
       "<p>Odds below are the collection counts. Every mint draws a random remaining token id on-chain, and every remaining card &mdash; Legendary included &mdash; can be drawn.</p>" +
       "<table><thead><tr><th>Tier</th><th>Count</th><th>Share</th></tr></thead><tbody>" + oddsRows + "</tbody></table></div>" +
@@ -547,131 +431,53 @@
   }
 
   function bindMint() {
-    var minus = $("#qty-minus");
-    var plus = $("#qty-plus");
-    if (minus) minus.addEventListener("click", function () {
-      if (state.mintQty > 1) { state.mintQty--; render(); refreshPrice(); }
-    });
-    if (plus) plus.addEventListener("click", function () {
-      var maxQty = MAX_QTY;
-      if (chainState.remaining != null) maxQty = Math.min(MAX_QTY, Math.max(1, chainState.remaining));
-      if (state.mintQty < maxQty) { state.mintQty++; render(); refreshPrice(); }
-    });
-    var connectBtn = $("#mint-connect-btn");
-    if (connectBtn) connectBtn.addEventListener("click", connectWallet);
-    var switchBtn = $("#switch-chain-btn");
-    if (switchBtn) switchBtn.addEventListener("click", switchToBsc);
+    var copyPrompt = $("#copy-prompt-btn");
+    if (copyPrompt) copyPrompt.addEventListener("click", function () { copyText(AGENT_PROMPT, copyPrompt); });
+    var copyCli = $("#copy-cli-btn");
+    if (copyCli) copyCli.addEventListener("click", function () { copyText(BAW_CLI, copyCli); });
     var retry = $("#chain-retry");
-    if (retry) retry.addEventListener("click", function () { loadChainState(true); refreshPrice(); });
-    var mintBtn = $("#mint-btn");
-    if (mintBtn) mintBtn.addEventListener("click", function () { doRealMint(state.mintQty); });
-    updateMintButton();
-    refreshPrice();
+    if (retry) retry.addEventListener("click", function () { loadChainState(true); });
+    var priceRetry = $("#price-retry");
+    if (priceRetry) priceRetry.addEventListener("click", function () { priceState.loaded = false; priceState.error = false; loadMintPrice(true); });
+    var checkBtn = $("#check-wallet-btn");
+    if (checkBtn) checkBtn.addEventListener("click", runCheckWallet);
+    var checkInput = $("#check-address");
+    if (checkInput) checkInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); runCheckWallet(); } });
+    loadMintPrice();
+    syncPriceUi();
   }
 
-  function mintErrorMessage(e) {
-    if (e && e.code === 4001) return "Cancelled in your wallet. No transaction was sent and nothing was charged.";
-    if (e && e.message === "WRONG_CHAIN") return "Your wallet is not on BNB Smart Chain. Switch networks and try again.";
-    if (e && e.message === "MINT_OFF") return "Minting is currently off.";
-    if (e && e.message === "SOLD_OUT") return "Not enough tokens left for that quantity.";
-    var msg = (e && e.message) ? String(e.message) : String(e);
-    if (/insufficient funds/i.test(msg)) return "Your wallet does not have enough BNB for this mint plus network gas.";
-    if (/incorrect payment/i.test(msg)) return "The contract rejected the payment amount. The price may have changed; try again.";
-    if (/exceeds max supply/i.test(msg)) return "That quantity exceeds the remaining supply.";
-    if (/minting is not active/i.test(msg)) return "Minting is currently off.";
-    return "Mint failed: " + msg.slice(0, 160);
-  }
-
-  function parseMintedIds(receipt, minterAddress, iface) {
-    var ids = [];
-    for (var i = 0; i < receipt.logs.length; i++) {
-      try {
-        var parsed = iface.parseLog(receipt.logs[i]);
-        if (parsed && parsed.name === "Transfer" &&
-            parsed.args.from.toLowerCase() === ZERO_ADDRESS &&
-            parsed.args.to.toLowerCase() === minterAddress.toLowerCase()) {
-          ids.push(Number(parsed.args.tokenId));
-        }
-      } catch (e) { /* log from another contract or event; ignore */ }
-    }
-    return ids;
-  }
-
-  function doRealMint(qty) {
-    if (state.mintPending) return;
-    if (!state.wallet) {
-      setMintMessage("error", "Connect your wallet first.");
+  function runCheckWallet() {
+    var input = $("#check-address");
+    var slot = $("#check-wallet-result");
+    var address = input ? input.value.trim() : "";
+    if (typeof ethers === "undefined" || !ethers.isAddress || !ethers.isAddress(address)) {
+      state.checkWallet = { address: address, error: "Enter a valid 0x wallet address." };
+      if (slot) slot.innerHTML = '<p class="mint-status mint-status-error" role="status">Enter a valid 0x wallet address.</p>';
+      announce("Enter a valid 0x wallet address.");
       return;
     }
-    if (typeof ethers === "undefined") {
-      setMintMessage("error", "The wallet library did not load. Reload the page and try again.");
-      return;
-    }
-    var wp = getWalletProvider();
-    if (!wp) {
-      setMintMessage("error", "No wallet detected in this browser. Open this site in your wallet app's browser to mint.");
-      return;
-    }
-    state.mintPending = true;
-    updateMintButton();
-    setMintMessage("info", "Checking the contract…");
-    var provider = new ethers.BrowserProvider(wp);
-    var signer;
-    var writeContract;
-    provider.getSigner().then(function (s) {
-      signer = s;
-      return signer.getAddress();
-    }).then(function (minterAddress) {
-      return provider.getNetwork().then(function (net) {
-        if (Number(net.chainId) !== CHAIN_ID) throw new Error("WRONG_CHAIN");
-        writeContract = new ethers.Contract(CONTRACT_ADDRESS, MINT_ABI, signer);
-        return Promise.all([
-          writeContract.mintActive(),
-          writeContract.remainingSupply(),
-          writeContract.mintPrice(qty),
-          minterAddress
-        ]);
-      });
+    var checksummed = ethers.getAddress(address);
+    if (slot) slot.innerHTML = "<p>Reading the chain…</p>";
+    getReadContract().then(function (c) {
+      return Promise.all([c.balanceOf(checksummed), readProvider.getBalance(checksummed)]);
     }).then(function (res) {
-      var active = res[0], remaining = res[1], price = res[2], minterAddress = res[3];
-      if (!active) throw new Error("MINT_OFF");
-      if (remaining < BigInt(qty)) throw new Error("SOLD_OUT");
-      return writeContract.mint.estimateGas(qty, { value: price }).then(function (est) {
-        var gasLimit = est * 120n / 100n; // 20% safety margin
-        setMintMessage("info", "Waiting for approval in your wallet… Check the quantity, price and network in your wallet before approving.");
-        return writeContract.mint(qty, { value: price, gasLimit: gasLimit });
-      }).then(function (tx) {
-        state.lastTxHash = tx.hash;
-        setMintMessage("info", "Transaction sent. Waiting for network confirmation…", tx.hash);
-        return tx.wait().then(function (receipt) {
-          return { receipt: receipt, minterAddress: minterAddress };
-        });
-      });
-    }).then(function (out) {
-      var iface = new ethers.Interface(MINT_ABI);
-      var ids = parseMintedIds(out.receipt, out.minterAddress, iface);
-      state.lastMintedIds = ids;
-      ids.forEach(function (id) { state.sessionMintedIds.push(id); });
-      if (ids.length) {
-        setMintMessage("ok", "Minted " + ids.length + " token" + (ids.length === 1 ? "" : "s") + ". Your card" + (ids.length === 1 ? " is" : "s are") + " below.", state.lastTxHash);
-      } else {
-        setMintMessage("ok", "Transaction confirmed. The token ids were not found in the receipt; check the transaction on BscScan.", state.lastTxHash);
-      }
-      state.mintPending = false;
-      loadChainState(true);
-      refreshPrice();
-      render();
-    }).catch(function (e) {
-      state.mintPending = false;
-      setMintMessage("error", mintErrorMessage(e));
-      updateMintButton();
+      state.checkWallet = { address: checksummed, balance: Number(res[0]), bnb: fmtWei(res[1].toString()), error: null };
+      var el = $("#check-wallet-result");
+      if (el) el.innerHTML = '<p role="status">Wallet <a href="https://bscscan.com/address/' + esc(checksummed) + '" target="_blank" rel="noopener noreferrer">' + esc(checksummed) + "</a> holds <strong>" + state.checkWallet.balance + "</strong> Mythora token(s) and <strong>" + esc(state.checkWallet.bnb) + " BNB</strong>.</p>";
+      announce("Wallet checked.");
+    }).catch(function () {
+      state.checkWallet = { address: checksummed, error: "Could not read the chain. Check your connection and try again." };
+      var el2 = $("#check-wallet-result");
+      if (el2) el2.innerHTML = '<p class="mint-status mint-status-error" role="status">Could not read the chain. Check your connection and try again.</p>';
+      announce("Could not read the chain.");
     });
   }
 
   function galleryView(query, isNavigation) {
     if (isNavigation) {
       // Arriving via a link resets the filters; a rarity query applies it.
-      // Re-renders caused by state changes (e.g. connecting a wallet)
+      // Re-renders caused by state changes
       // preserve the filters the user already chose.
       state.gallery.status = "all";
       state.gallery.search = "";
@@ -687,7 +493,7 @@
       if (["legendary", "epic", "rare", "common"].indexOf(r2) !== -1) state.gallery.rarity = r2;
     }
     return '<section aria-labelledby="gallery-h"><h2 id="gallery-h">Gallery &mdash; The Codex</h2>' +
-      '<div class="notice"><strong>Reconstruction notice.</strong> Gallery data outside the 12 Legends and the 2 verified pre-minted tokens (#1953 Kinoko Spirit and #2496 Three-Tail Kitsune) is a reconstruction, not the original Emergent genesis allocation table. Rarity counts are exact; individual names and traits for other tokens are generated deterministically for review only. <strong>Art note:</strong> every card shows its own final artwork &mdash; 12 Legend artworks plus 3,798 detailed composites from 32 trait-layer bases, all pinned to IPFS. The written traits under each card match the artwork by construction.</div>' +
+      '<div class="notice"><strong>Gallery notice.</strong> Gallery data outside the 12 Legends and the 2 verified pre-minted tokens (#1953 Kinoko Spirit and #2496 Three-Tail Kitsune) is generated deterministically, not from the original genesis allocation table. Rarity counts are exact; individual names and traits for other tokens are generated deterministically. <strong>Art note:</strong> every card shows its own final artwork &mdash; 12 Legend artworks plus 3,798 detailed composites from 32 trait-layer bases, all pinned to IPFS. The written traits under each card match the artwork by construction.</div>' +
       '<form class="filters" id="gallery-filters" aria-label="Gallery filters">' +
       '<label for="filter-rarity">Rarity<select id="filter-rarity">' +
       [["all", "All"], ["legendary", "Legendary"], ["epic", "Epic"], ["rare", "Rare"], ["common", "Common"]].map(function (o) {
@@ -765,7 +571,7 @@
       "<ul class=\"trait-list\">" + traits + "</ul>" +
       "<dl><dt>Status</dt><dd>" + esc(t.status) + "</dd>" +
       "<dt>Owner</dt><dd>—</dd>" +
-            "<dt>Minted</dt><dd>" + esc(t.mintedAt || (t.preMinted ? "Before this reconstruction session (date not verified)" : "—")) + "</dd></dl>" +
+            "<dt>Minted</dt><dd>" + esc(t.mintedAt || (t.preMinted ? "Date not verified" : "—")) + "</dd></dl>" +
       (t.status === "Available"
         ? '<p><a class="button btn-primary" href="#/mint">Mint now</a></p>'
         : "") +
@@ -779,7 +585,7 @@
     return '<section aria-labelledby="trans-h"><h2 id="trans-h">Transparency</h2>' +
       "<p>The permanent cap: <strong>3,810</strong>. The stated maximum supply is a constant in the displayed contract design. No function in that design can raise it.</p>" +
       '<div class="card"><h3>Fixed allocation (as claimed)</h3>' +
-      "<p>All 3,810 tokens &mdash; tier, pool and traits &mdash; were described as committed at genesis with seed 3810, so anyone could re-run the generator and verify the table. That generator was not available for this reconstruction, so the claim could not be independently verified here.</p>" +
+      "<p>All 3,810 tokens &mdash; tier, pool and traits &mdash; were described as committed at genesis with seed 3810, so anyone could re-run the generator and verify the table. That generator was not available here, so the claim could not be independently verified.</p>" +
       "<table><thead><tr><th>Pool</th><th>Legendary</th><th>Epic</th><th>Rare</th><th>Common</th><th>Total</th></tr></thead><tbody>" +
       "<tr><td>Free Mint</td><td>0</td><td>93</td><td>306</td><td>1,506</td><td>1,905</td></tr>" +
       "<tr><td>Paid Mint</td><td>12</td><td>93</td><td>306</td><td>1,494</td><td>1,905</td></tr>" +
@@ -829,8 +635,7 @@
     var controls;
     if (!state.wallet) {
       controls = '<div class="callout"><p><strong>Hold a Mythora to vote.</strong></p>' +
-        '<p>Connect your wallet to see the voting controls.</p>' +
-        '<button type="button" class="btn-primary" id="gov-connect">Connect Wallet</button></div>';
+        "<p>This page never connects to a wallet, so it cannot check holdings. Votes here are counted in this browser session only and are not recorded on-chain.</p></div>";
     } else if (!holds) {
       controls = '<div class="callout"><p><strong>Hold a Mythora to vote.</strong></p>' +
         '<p>This wallet holds no Mythora token in this session yet.</p>' +
@@ -854,12 +659,10 @@
       "<p>Weights: Legendary 10x &middot; Epic 4x &middot; Rare 2x &middot; Common 1x. No deadline, proposal id, or winner history is shown, because none was verified.</p>" +
       controls +
       '<div class="grid-3" style="margin-top:1rem">' + cards + "</div>" +
-      '<section class="card" style="margin-top:1rem"><h3>Holder community</h3><p>Planned. No gated channels, links, or holder-only interface are provided in this reconstruction.</p></section></section>';
+      '<section class="card" style="margin-top:1rem"><h3>Holder community</h3><p>Planned. No gated channels, links, or holder-only interface are provided on this site.</p></section></section>';
   }
 
   function bindGovernance() {
-    var connectBtn = $("#gov-connect");
-    if (connectBtn) connectBtn.addEventListener("click", connectWallet);
     $all(".vote-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var proposal = DATA.proposals[parseInt(btn.getAttribute("data-index"), 10)];
@@ -877,7 +680,7 @@
   /* ---------------- Not found ---------------- */
   function notFoundView(message, detail) {
     return '<section aria-labelledby="nf-h"><h2 id="nf-h">Page not found</h2>' +
-      "<p>" + (message || "The page you asked for does not exist in this reconstruction.") + "</p>" +
+      "<p>" + (message || "The page you asked for does not exist on this site.") + "</p>" +
       (detail ? "<p>" + detail + "</p>" : "") +
       '<p><a href="#/">Back to the home page</a> &middot; <a href="#/gallery">Back to the codex</a></p></section>';
   }
@@ -888,7 +691,6 @@
     var hashKey = window.location.hash || "#/";
     var isNavigation = hashKey !== lastHashKey;
     lastHashKey = hashKey;
-    renderHeaderWallet();
     var parsed = parseHash();
     var path = parsed.path;
     var app = $("#app");
@@ -912,7 +714,7 @@
       app.innerHTML = notFoundView();
     }
     var heading = app.querySelector("h1, h2");
-    if (heading) document.title = heading.textContent.trim() + " — Mythora (Reconstruction)";
+    if (heading) document.title = heading.textContent.trim() + " — Mythora";
     window.scrollTo(0, 0);
     // Keep chain numbers fresh without hammering the RPC: refresh at
     // most once a minute while the user navigates.
@@ -922,9 +724,10 @@
 
   window.addEventListener("hashchange", render);
 
-  // Exposed only for local verification of this reconstruction.
+  // Exposed for local testing only.
   window.MYTHORA_TEST = { state: state, data: DATA, counters: counters, tokensById: tokensById, chainState: chainState };
 
   render();
   loadChainState();
+  loadMintPrice();
 })();

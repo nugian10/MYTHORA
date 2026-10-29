@@ -1,4 +1,4 @@
-/* Mythora reconstruction — original CSS, no external assets. */
+/* Mythora — original CSS, no external assets. */
 :root {
   --bg: #0d0a18;
   --bg2: #171226;
@@ -171,6 +171,22 @@ footer p { margin: .25rem 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+}
+
+/* Agent mint pattern (Mint Portal): read-only stats, prompt/CLI blocks, wallet check. */
+.steps { list-style: none; padding: 0; margin: .6rem 0; display: grid; gap: .7rem; }
+.code-block {
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 1rem; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88rem; line-height: 1.6;
+  margin: .6rem 0;
+}
+.prompt-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; }
+.prompt-head h3 { margin: 0; }
+.check-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin: .6rem 0; }
+.check-row input {
+  font: inherit; color: var(--ink); background: var(--bg2);
+  border: 1px solid var(--line); border-radius: 10px; padding: .6rem .7rem; flex: 1 1 16rem; min-width: 0;
 }
 
 .mint-divider { border: 0; border-top: 1px solid var(--line); margin: 1.4rem 0; }

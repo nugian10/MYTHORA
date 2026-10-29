@@ -1,4 +1,4 @@
-/* Mythora — reconstruction data (not the original Emergent genesis table).
+/* Mythora — site data.
  *
  * Verified facts used here: cap 3,810; rarity counts Legendary 12, Epic 186,
  * Rare 612, Common 3,000; the 12 Legendary token ids / editions / names /
