@@ -264,6 +264,18 @@ footer p { margin: .25rem 0; }
   .cover, .cover-title, .cover-stars span, .float-card, .cover-track { animation: none; }
 }
 
+/* Dual-path Mint view: the browser-wallet card comes first and leads. */
+.mint-path-label {
+  color: var(--gold); letter-spacing: .18em; font-size: .78rem; font-weight: 800; margin: 0 0 .4rem;
+}
+.mint-path-primary {
+  border-color: var(--gold);
+  background: linear-gradient(160deg, #2a2144, var(--card) 55%);
+  box-shadow: 0 0 0 1px rgba(242, 193, 78, .25), 0 14px 34px rgba(0, 0, 0, .35);
+}
+.mint-path-primary h3 { font-size: 1.35rem; margin-top: .2rem; }
+.mint-big { font-size: 1.15rem; padding: .85rem 1.6rem; }
+
 /* Long identifiers wrap inside their containers: no horizontal page overflow.
  * Full text stays visible and clickable; nothing is truncated or hidden. */
 html, body { overflow-x: clip; }
