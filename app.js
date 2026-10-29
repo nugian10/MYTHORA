@@ -246,7 +246,7 @@
     if (!wp) {
       state.noProvider = true;
       render();
-      announce("No wallet found in this browser. Open this site in your wallet app's browser to mint.");
+      announce("No wallet detected in this browser. Open this site in your wallet app's browser to mint.");
       return;
     }
     state.noProvider = false;
@@ -518,8 +518,6 @@
         (state.wrongChain
           ? '<p class="mint-status mint-status-error">Your wallet is not on BNB Smart Chain.</p><p><button type="button" class="btn-primary" id="switch-chain-btn">Switch to BNB Smart Chain</button></p>'
           : "");
-    } else if (state.noProvider || getWalletProvider() == null) {
-      walletBlock = '<p class="notice">No wallet found in this browser. Open this site in your wallet app&rsquo;s browser (for example MetaMask or the Binance Web3 wallet) to mint. This page never asks for a seed phrase or private key.</p>';
     } else {
       walletBlock = '<p>Connect your wallet to mint. Your wallet signs the transaction; this page never asks for a seed phrase or private key.</p>' +
         '<p><button type="button" class="btn-primary" id="mint-connect-btn">Connect Wallet</button></p>';
@@ -540,7 +538,6 @@
       '<button type="button" class="btn-primary" id="mint-btn" ' + (s.disabled ? "disabled" : "") + ">" + esc(s.label) + "</button>" +
       "</div>";
     return '<section aria-labelledby="mint-h"><h2 id="mint-h">Mint Portal</h2>' +
-      "<p>You get your card right away. No question-mark card, no waiting. Minting is open on-chain: the first 1,905 mints cost 0.00005 BNB each, then 0.0005 BNB each.</p>" +
       walletBlock + totalsLine + '<div id="mint-status-slot">' + mintMessageHtml() + "</div>" + mintedCardsHtml() +
       '<div class="card" id="mint-box">' + mintPanel + "</div>" +
       '<div class="card odds"><h3>Your odds on every mint</h3>' +
@@ -612,7 +609,7 @@
     }
     var wp = getWalletProvider();
     if (!wp) {
-      setMintMessage("error", "No wallet found in this browser. Open this site in your wallet app's browser to mint.");
+      setMintMessage("error", "No wallet detected in this browser. Open this site in your wallet app's browser to mint.");
       return;
     }
     state.mintPending = true;
