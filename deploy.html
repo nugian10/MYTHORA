@@ -63,11 +63,11 @@
 
   <div class="card">
     <h2>Step 1 &mdash; Connect your wallet</h2>
-    <p>The wallet that must connect is the owner wallet. Deploying from another address would make a different account the contract owner.</p>
+    <p>The wallet that must connect is the owner wallet. Deploying from another address would make a different account the contract owner. If your wallet is in the Binance app, open this page in the app's DApp browser so the wallet can connect.</p>
     <button id="btnConnect" class="primary">Connect Wallet</button>
     <div id="noWallet" class="warn hidden">
       <b>No wallet found.</b> Open this page inside your wallet app's own browser
-      (for example via the Browser menu in the wallet app), or open it in a desktop browser
+      (in the Binance app, open the page from the Web3 wallet's DApp browser), or open it in a desktop browser
       with a wallet extension installed. Then reload this page.
     </div>
     <div id="walletInfo" class="hidden">
@@ -134,10 +134,15 @@ var ABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"i
 var IDR_PER_USD = 16500;
 var BUDGET_IDR = 10000;
 
-var provider = null, signer = null, userAddress = null;
+var provider = null, signer = null, userAddress = null, walletProvider = null;
 var gasEstimate = null, bnbUsd = 750, deploying = false;
 
 function $(id) { return document.getElementById(id); }
+function getWalletProvider() {
+  if (typeof window.ethereum !== "undefined") return window.ethereum;
+  if (typeof window.binancew3w !== "undefined" && window.binancew3w.ethereum) return window.binancew3w.ethereum;
+  return null;
+}
 function setStatus(t) { $("status").textContent = t; }
 function shortAddr(a) { return a ? a.slice(0, 6) + "..." + a.slice(-4) : ""; }
 
@@ -248,15 +253,16 @@ async function refreshBalanceAndEstimate() {
 }
 
 async function connectWallet() {
-  if (typeof window.ethereum === "undefined") {
+  walletProvider = getWalletProvider();
+  if (!walletProvider) {
     $("noWallet").classList.remove("hidden");
     $("btnConnect").disabled = true;
     return;
   }
   try {
     setStatus("Waiting for approval in your wallet…");
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    provider = new ethers.BrowserProvider(window.ethereum);
+    await walletProvider.request({ method: "eth_requestAccounts" });
+    provider = new ethers.BrowserProvider(walletProvider);
     signer = await provider.getSigner();
     userAddress = await signer.getAddress();
     $("walletInfo").classList.remove("hidden");
@@ -281,14 +287,14 @@ async function connectWallet() {
 
 async function switchChain() {
   try {
-    await window.ethereum.request({
+    await walletProvider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: "0x38" }]
     });
   } catch (e) {
     if (e && e.code === 4902) {
       try {
-        await window.ethereum.request({
+        await walletProvider.request({
           method: "wallet_addEthereumChain",
           params: [{
             chainId: "0x38",
@@ -375,9 +381,12 @@ $("btnCopy").addEventListener("click", function () {
     navigator.clipboard.writeText(t).then(function () { $("btnCopy").textContent = "Copied!"; });
   }
 });
-if (typeof window.ethereum !== "undefined") {
-  window.ethereum.on("accountsChanged", function () { window.location.reload(); });
-  window.ethereum.on("chainChanged", function () { window.location.reload(); });
+walletProvider = getWalletProvider();
+if (walletProvider) {
+  if (walletProvider.on) {
+    walletProvider.on("accountsChanged", function () { window.location.reload(); });
+    walletProvider.on("chainChanged", function () { window.location.reload(); });
+  }
 } else {
   $("noWallet").classList.remove("hidden");
   $("btnConnect").disabled = true;
