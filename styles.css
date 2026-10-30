@@ -26,7 +26,7 @@ body {
     var(--bg);
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 a { color: var(--teal); }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
@@ -61,7 +61,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .main-nav a[aria-current="page"] { background: var(--card2); color: var(--gold); }
 .main-nav a:hover { background: var(--card2); }
-.wallet-box { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .mint-status { margin: .8rem 0; }
 .mint-status-error { color: var(--danger); font-weight: 700; }
 .mint-status-ok { color: var(--ok); font-weight: 700; }
@@ -70,7 +69,7 @@ button, .button {
   font: inherit; cursor: pointer; border-radius: 999px; border: 1px solid transparent;
   padding: .6rem 1.05rem; font-weight: 700; text-decoration: none; display: inline-block;
 }
-.btn-primary { background: var(--gold); color: #1a1405; }
+.btn-primary { background: var(--gold); color: #1a1405; box-shadow: 0 8px 22px rgba(242, 193, 78, .28); }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-ghost:hover { background: var(--card2); }
@@ -85,11 +84,13 @@ main { max-width: var(--max); margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 .counters {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; margin: 1.6rem 0;
 }
-.counter { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; text-align: center; }
-.counter strong { display: block; font-size: 1.6rem; }
-.counter span { color: var(--dim); font-size: .85rem; letter-spacing: .06em; }
-section { margin-top: 2.2rem; }
-h2 { font-size: 1.6rem; margin-bottom: .4rem; }
+.counter { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1rem; text-align: center; }
+.counter strong { display: block; font-size: 2.1rem; line-height: 1.1; letter-spacing: .01em; }
+.counter span { color: var(--dim); font-size: .88rem; letter-spacing: .06em; }
+.counter-price { border-color: rgba(242, 193, 78, .55); }
+.counter-price strong { color: var(--gold); }
+section { margin-top: 2.6rem; }
+h2 { font-size: 1.7rem; margin-bottom: .5rem; letter-spacing: .01em; }
 h3 { margin-bottom: .3rem; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem;
@@ -106,7 +107,9 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); }
 th { color: var(--gold); font-size: .85rem; letter-spacing: .06em; }
 .legend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .9rem; }
-.token-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.token-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.token-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0, 0, 0, .4); }
+.token-legendary { border-color: rgba(242, 193, 78, .55); background: linear-gradient(170deg, #2a2144, var(--card) 60%); }
 .token-card a { color: inherit; text-decoration: none; display: block; }
 .token-card a:hover .token-name { color: var(--gold); }
 .token-body { padding: .8rem .9rem 1rem; }
@@ -137,9 +140,6 @@ th { color: var(--gold); font-size: .85rem; letter-spacing: .06em; }
 .gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .9rem; }
 .mint-tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
 .mint-tabs button[aria-selected="true"] { background: var(--gold); color: #1a1405; }
-.qty-row { display: flex; align-items: center; gap: .6rem; margin: .8rem 0; flex-wrap: wrap; }
-.qty-row button { width: 2.6rem; height: 2.6rem; padding: 0; font-size: 1.3rem; }
-.qty-row output { font-size: 1.3rem; font-weight: 800; min-width: 2rem; text-align: center; }
 .price-line { font-size: 1.1rem; }
 .price-line strong { font-size: 1.4rem; }
 dialog {
@@ -183,10 +183,6 @@ footer p { margin: .25rem 0; }
   font: inherit; color: var(--ink); background: var(--bg2);
   border: 1px solid var(--line); border-radius: 10px; padding: .6rem .7rem; flex: 1 1 16rem; min-width: 0;
 }
-
-.mint-divider { border: 0; border-top: 1px solid var(--line); margin: 1.4rem 0; }
-#mint-box h3 { margin-top: 0; }
-#mint-box #panel-paid h3 { margin-top: 0; }
 
 .pill-burned{background:#3a2a2a;color:#f0b0b0}
 .meter{height:12px;background:#2a2a35;border-radius:6px;overflow:hidden;margin:.5rem 0}
@@ -264,7 +260,43 @@ footer p { margin: .25rem 0; }
   .cover, .cover-title, .cover-stars span, .float-card, .cover-track { animation: none; }
 }
 
-/* Dual-path Mint view: the browser-wallet card comes first and leads. */
+/* Trust row under the hero actions: short, verifiable claims only. */
+.trust-row {
+  position: relative; display: flex; flex-wrap: wrap; justify-content: center;
+  gap: .4rem 1.4rem; margin: 1.3rem 0 0; color: var(--ink); font-size: 1rem; font-weight: 600;
+}
+.trust-row span { white-space: nowrap; }
+.trust-row b { color: var(--gold); }
+
+/* Early-price badge: the contract's opening price rule, front and center. */
+.price-badge {
+  display: inline-block; background: linear-gradient(120deg, #f2c14e, #ffd166);
+  color: #1a1405; font-weight: 800; border-radius: 999px; max-width: 100%;
+  padding: .55rem 1.3rem; margin: .4rem 0 1.1rem; line-height: 1.35;
+  box-shadow: 0 10px 26px rgba(242, 193, 78, .35);
+}
+.price-badge span { display: block; font-size: .85rem; font-weight: 600; }
+
+/* Live-stats label above the counters, home and Mint alike. */
+.stats-label {
+  text-align: center; color: var(--gold); letter-spacing: .18em;
+  font-size: .8rem; font-weight: 800; margin: 1.6rem 0 0;
+}
+.stats-label + .counters { margin-top: .6rem; }
+.live-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ok); margin-right: .4rem; vertical-align: 1px;
+}
+
+/* Agent steps as clear numbered cards. */
+.steps li {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: .9rem 1rem; min-width: 0; overflow-wrap: anywhere;
+}
+.steps li strong { color: var(--gold); }
+.prompt-hint { color: var(--muted); margin: .2rem 0 .6rem; }
+
+/* Agent Mint view: the agent prompt block leads. */
 .mint-path-label {
   color: var(--gold); letter-spacing: .18em; font-size: .78rem; font-weight: 800; margin: 0 0 .4rem;
 }
